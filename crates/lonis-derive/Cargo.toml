@@ -1,0 +1,20 @@
+[package]
+name = "lonis-derive"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Procedural macros for Lonis tools"
+homepage.workspace = true
+repository.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { workspace = true }
+quote = { workspace = true }
+
+[dev-dependencies]
+lonis-schema = { workspace = true, features = ["derive"] }

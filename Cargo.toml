@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/lonis-schema", "crates/lonis-core", "crates/lonis-cli"]
+members = ["crates/lonis-schema", "crates/lonis-derive", "crates/lonis-core", "crates/lonis-cli"]
 
 [workspace.package]
 version = "0.0.1"
@@ -19,3 +19,6 @@ thiserror = "2"
 clap = { version = "4", features = ["derive"] }
 lonis-schema = { version = "0.0.1", path = "crates/lonis-schema" }
 lonis-core = { version = "0.0.1", path = "crates/lonis-core" }
+lonis-derive = { version = "0.0.1", path = "crates/lonis-derive" }
+syn = "2"
+quote = "1"

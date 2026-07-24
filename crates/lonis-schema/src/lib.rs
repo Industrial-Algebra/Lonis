@@ -20,6 +20,10 @@
 
 #![forbid(unsafe_code)]
 
+/// Re-export the `LonisCapabilities` derive (behind the `derive` feature).
+#[cfg(feature = "derive")]
+pub use lonis_derive::LonisCapabilities;
+
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
