@@ -1,0 +1,18 @@
+[workspace]
+resolver = "2"
+members = ["crates/lonis-schema"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.75"
+license = "Apache-2.0"
+authors = ["Industrial Algebra"]
+repository = "https://github.com/Industrial-Algebra/Lonis"
+homepage = "https://github.com/Industrial-Algebra/Lonis"
+description = "Lonis — an AI-native tool harness for the Anima ecosystem"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
