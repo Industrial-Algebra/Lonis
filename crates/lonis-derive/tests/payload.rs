@@ -121,3 +121,48 @@ fn no_namespace_uses_bare_variant_name() {
     let back: BarePayload = serde_json::from_value(wire).unwrap();
     assert_eq!(back, payload);
 }
+
+// -- render_fn hook: derive wire safety AND a custom human render (consumer
+//    review on PR #6: karpal's multi-line Search render) --
+
+#[derive(Debug, Clone, PartialEq, lonis_schema::BlockPayload)]
+#[lonis_payload(namespace = "karpal", render_fn = "render_karpal")]
+enum RenderedPayload {
+    Search { query: String, results: Vec<String> },
+    Ready,
+}
+
+fn render_karpal(payload: &RenderedPayload) -> String {
+    match payload {
+        RenderedPayload::Search { query, results } => {
+            format!("query: {query}\n{}", results.join("\n"))
+        }
+        RenderedPayload::Ready => "karpal: ready".to_owned(),
+    }
+}
+
+#[test]
+fn render_fn_delegates_render_human_to_the_hook() {
+    let payload = RenderedPayload::Search {
+        query: "proof".into(),
+        results: vec!["karpal-proof".into(), "karpal-verify".into()],
+    };
+    assert_eq!(
+        payload.render_human(),
+        "query: proof\nkarpal-proof\nkarpal-verify"
+    );
+    assert_eq!(RenderedPayload::Ready.render_human(), "karpal: ready");
+}
+
+#[test]
+fn render_fn_keeps_wire_and_kind_invariants() {
+    let payload = RenderedPayload::Search {
+        query: "proof".into(),
+        results: vec![],
+    };
+    assert_eq!(payload.kind_name(), "karpal.search");
+    let wire = serde_json::to_value(&payload).unwrap();
+    assert_eq!(wire["kind"], "karpal.search");
+    let back: RenderedPayload = serde_json::from_value(wire).unwrap();
+    assert_eq!(back, payload);
+}

@@ -116,9 +116,10 @@ pub fn derive_lonis_capabilities(input: TokenStream) -> TokenStream {
 ///
 /// Supports struct variants (named fields) and unit variants (which carry
 /// `data: null`). Tuple variants and generics are rejected at compile time.
-/// `render_human` defaults to `"<kind>: <Debug>"`, so the enum must
-/// implement `Debug`. The consumer crate must depend on `serde` and
-/// `serde_json`.
+/// `render_human` defaults to `"<kind>: <Debug>"` (the enum must implement
+/// `Debug`), or delegates to a hook: `render_fn = "path::to::render"` — a
+/// `fn(&Self) -> String` — so a custom human render never costs the derive's
+/// wire safety. The consumer crate must depend on `serde` and `serde_json`.
 ///
 /// ```ignore
 /// use lonis_schema::BlockPayload;
@@ -131,6 +132,14 @@ pub fn derive_lonis_capabilities(input: TokenStream) -> TokenStream {
 /// }
 ///
 /// assert_eq!(KarpalPayload::Ready.kind_name(), "karpal.ready");
+///
+/// // With a custom human render (keeps the derived wire safety):
+/// #[derive(Debug, Clone, PartialEq, BlockPayload)]
+/// #[lonis_payload(namespace = "karpal", render_fn = "render_karpal")]
+/// enum RenderedPayload {
+///     Search { query: String, results: Vec<String> },
+/// }
+/// fn render_karpal(p: &RenderedPayload) -> String { /* … */ }
 /// ```
 #[proc_macro_derive(BlockPayload, attributes(lonis_payload))]
 pub fn derive_block_payload(input: TokenStream) -> TokenStream {
@@ -158,7 +167,7 @@ fn expand_block_payload(input: &DeriveInput) -> Result<proc_macro2::TokenStream,
         ));
     };
 
-    let namespace = parse_namespace(input)?;
+    let (namespace, render_fn) = parse_payload_attrs(input)?;
 
     struct Variant {
         ident: syn::Ident,
@@ -253,6 +262,11 @@ fn expand_block_payload(input: &DeriveInput) -> Result<proc_macro2::TokenStream,
         }
     });
 
+    let render_body = match &render_fn {
+        Some(path) => quote! { #path(self) },
+        None => quote! { format!("{}: {:?}", self.__lonis_kind_name(), self) },
+    };
+
     Ok(quote! {
         const _: () = {
             #( #shadow_defs )*
@@ -312,17 +326,21 @@ fn expand_block_payload(input: &DeriveInput) -> Result<proc_macro2::TokenStream,
                     format!("lonis.block/{}/v1", self.__lonis_kind_name())
                 }
                 fn render_human(&self) -> String {
-                    format!("{}: {:?}", self.__lonis_kind_name(), self)
+                    #render_body
                 }
             }
         };
     })
 }
 
-/// Parse the optional `#[lonis_payload(namespace = "...")]` attribute,
-/// validating the namespace's canonical form.
-fn parse_namespace(input: &DeriveInput) -> Result<Option<String>, syn::Error> {
+/// Parse the optional `#[lonis_payload(...)]` attribute: `namespace = "…"`
+/// (validated canonical) and/or `render_fn = "path::to::fn"` (a
+/// `fn(&#name) -> String` hook for `render_human`).
+fn parse_payload_attrs(
+    input: &DeriveInput,
+) -> Result<(Option<String>, Option<syn::Path>), syn::Error> {
     let mut namespace: Option<String> = None;
+    let mut render_fn: Option<syn::Path> = None;
     for attr in &input.attrs {
         if attr.path().is_ident("lonis_payload") {
             attr.parse_nested_meta(|meta| {
@@ -330,8 +348,14 @@ fn parse_namespace(input: &DeriveInput) -> Result<Option<String>, syn::Error> {
                     let lit: LitStr = meta.value()?.parse()?;
                     namespace = Some(lit.value());
                     Ok(())
+                } else if meta.path.is_ident("render_fn") {
+                    let lit: LitStr = meta.value()?.parse()?;
+                    render_fn = Some(lit.parse()?);
+                    Ok(())
                 } else {
-                    Err(meta.error("unsupported `lonis_payload` key (expected `namespace`)"))
+                    Err(meta.error(
+                        "unsupported `lonis_payload` key (expected `namespace` or `render_fn`)",
+                    ))
                 }
             })?;
         }
@@ -348,7 +372,7 @@ fn parse_namespace(input: &DeriveInput) -> Result<Option<String>, syn::Error> {
             ));
         }
     }
-    Ok(namespace)
+    Ok((namespace, render_fn))
 }
 
 /// `SearchResults` → `search_results` (sufficient for variant idents).

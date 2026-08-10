@@ -40,7 +40,8 @@ behind `derive`) generates, from one enum declaration:
   (dots, matching the ecosystem's dotted protocol markers),
 - `schema_id()` — `lonis.block/<kind>/v1`,
 - `render_human()` — a `<kind>: <Debug>` default (the enum must be `Debug`;
-  verticals wanting richer output hand-implement `BlockPayload`).
+  a custom render delegates via `render_fn = "path::to::render"` without
+  giving up the derive's wire safety — the PR #6 consumer-review resolution).
 
 Because the serde tag and `kind_name()` come from one source, they cannot
 diverge. Deserializing into the vertical's own enum **rejects unknown kinds**
