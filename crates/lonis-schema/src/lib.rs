@@ -10,15 +10,14 @@
 //! defines the types every Lonis tool (and composable CLI) depends on so the
 //! harness and its consumers can discover, invoke, and parse them uniformly:
 //!
-//! - the canonical success [`Envelope<T>`] (on stdout),
+//! - the [`Block`] contract (doctrine §2.7) — the canonical structured
+//!   domain object every tool emits through, with the 14-kind seed corpus
+//!   ([`block::BlockKind`]), attribution, bounds, replay provenance, content
+//!   hashing, and render-parity,
 //! - the structured [`ToolError`] (on stderr),
 //! - [`OutputMode`] (human / json / ndjson),
 //! - the [`Capabilities`] self-description trait,
-//! - the [`ToolContract`] a tool/probe declares,
-//! - and the [`Block`] contract (doctrine §2.7) — the canonical structured
-//!   domain object every tool emits through, with the 14-kind seed corpus
-//!   ([`block::BlockKind`]), attribution, bounds, replay provenance, content
-//!   hashing, and render-parity.
+//! - and the [`ToolContract`] a tool/probe declares.
 //!
 //! See `docs/plans/lonis-schema-design.md` and `docs/adr/0001-block-contract.md`
 //! for the design decisions.
@@ -29,15 +28,13 @@ pub mod block;
 
 pub use block::kinds::{BlockCategory, BlockKind};
 pub use block::{
-    Attribution, AttributionSource, Block, BlockBounds, Compatibility, ReplayMetadata,
-    ReplayProvenance, BLOCK_SCHEMA_V1,
+    json_content_hash, now_rfc3339, Attribution, AttributionSource, Block, BlockBounds,
+    Compatibility, ReplayMetadata, ReplayProvenance, BLOCK_SCHEMA_V1,
 };
 
 /// Re-export the `LonisCapabilities` derive (behind the `derive` feature).
 #[cfg(feature = "derive")]
 pub use lonis_derive::LonisCapabilities;
-
-use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
@@ -53,9 +50,9 @@ pub enum OutputMode {
     /// Pretty, human-readable (default).
     #[default]
     Human,
-    /// One typed [`Envelope`] on stdout.
+    /// One JSON array of [`Block`]s on stdout.
     Json,
-    /// Streaming newline-delimited envelopes.
+    /// Streaming newline-delimited [`Block`]s, one per line.
     Ndjson,
 }
 
@@ -63,8 +60,8 @@ pub enum OutputMode {
 // Schema version (namespaced string protocol marker: <name>/v<N>)
 // ===========================================================================
 
-/// The default protocol marker for the Lonis tool envelope shape.
-pub const ENVELOPE_SCHEMA_V1: &str = "lonis.envelope/v1";
+/// The protocol marker for the v1 tool protocol (invoke contract).
+pub const TOOL_PROTOCOL_V1: &str = "lonis.tool/v1";
 
 /// A versioned protocol marker of the form `<name>/v<N>` (e.g.
 /// `lonis.envelope/v1`, `lonis.block/v1`, `amari.discovery/v1`), pinned on
@@ -114,7 +111,7 @@ impl SchemaVersion {
 
 impl Default for SchemaVersion {
     fn default() -> Self {
-        Self(ENVELOPE_SCHEMA_V1.to_owned())
+        Self(TOOL_PROTOCOL_V1.to_owned())
     }
 }
 
@@ -189,73 +186,6 @@ pub enum ToolIdError {
     /// An empty segment.
     #[error("tool id segments must be non-empty")]
     EmptySegment,
-}
-
-// ===========================================================================
-// Envelope (success on stdout; errors are ToolError on stderr)
-// ===========================================================================
-
-/// The canonical success envelope, emitted on **stdout**. Errors never appear
-/// here — they are [`ToolError`]s serialized to stderr (decision #1: amari split).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Envelope<T> {
-    /// The schema version of this envelope shape.
-    pub schema_version: SchemaVersion,
-    /// The tool that produced this envelope.
-    pub tool: ToolId,
-    /// The typed result payload.
-    pub result: T,
-    /// Execution metadata (warnings, timing, hashes, seed).
-    #[serde(default, skip_serializing_if = "Meta::is_empty")]
-    pub meta: Meta,
-}
-
-impl<T> Envelope<T> {
-    /// Construct an envelope with default (empty) metadata.
-    #[must_use]
-    pub fn new(tool: ToolId, result: T) -> Self {
-        Self {
-            schema_version: SchemaVersion::default(),
-            tool,
-            result,
-            meta: Meta::default(),
-        }
-    }
-
-    /// Attach metadata.
-    #[must_use]
-    pub fn with_meta(mut self, meta: Meta) -> Self {
-        self.meta = meta;
-        self
-    }
-}
-
-/// Execution metadata carried on every envelope.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct Meta {
-    /// Wall-clock duration of the operation, in milliseconds.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub duration_ms: Option<u64>,
-    /// Non-fatal warnings.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub warnings: Vec<String>,
-    /// Determinism seed, when relevant.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub seed: Option<u64>,
-    /// Content hashes (e.g. `{"input": "...", "catalog": "..."}`).
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub hashes: BTreeMap<String, String>,
-}
-
-impl Meta {
-    /// Whether the metadata is empty (no warnings / timing / seed / hashes).
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.duration_ms.is_none()
-            && self.warnings.is_empty()
-            && self.seed.is_none()
-            && self.hashes.is_empty()
-    }
 }
 
 // ===========================================================================
@@ -472,30 +402,6 @@ mod tests {
             ToolId::new("amari::search").unwrap_err(),
             ToolIdError::EmptySegment
         );
-    }
-
-    #[derive(Debug, PartialEq, Serialize, Deserialize)]
-    struct Payload {
-        count: u32,
-    }
-
-    #[test]
-    fn envelope_round_trips() {
-        let env = Envelope::new(
-            ToolId::new("amari:discovery:search").unwrap(),
-            Payload { count: 3 },
-        );
-        let json = serde_json::to_string(&env).unwrap();
-        let back: Envelope<Payload> = serde_json::from_str(&json).unwrap();
-        assert_eq!(back, env);
-    }
-
-    #[test]
-    fn envelope_omits_empty_meta() {
-        let env = Envelope::new(ToolId::new("t:n:i").unwrap(), 1_u32);
-        let json = serde_json::to_string(&env).unwrap();
-        assert!(!json.contains("meta"));
-        assert!(!json.contains("warnings"));
     }
 
     #[test]

@@ -136,6 +136,31 @@ pub struct Attribution {
     pub provenance: AttributionSource,
 }
 
+/// The current UTC time as an RFC 3339 string, for [`AttributionSource::when`].
+#[must_use]
+pub fn now_rfc3339() -> String {
+    time::OffsetDateTime::now_utc()
+        .format(&time::format_description::well_known::Rfc3339)
+        .expect("RFC 3339 formatting is infallible")
+}
+
+impl Attribution {
+    /// Construct attribution for a participant/producer pair, stamped now
+    /// (UTC). `viewpoint` and `location` start unset.
+    #[must_use]
+    pub fn new(identity: impl Into<String>, producer: impl Into<String>) -> Self {
+        Self {
+            identity: identity.into(),
+            viewpoint: None,
+            provenance: AttributionSource {
+                when: now_rfc3339(),
+                location: None,
+                producer: producer.into(),
+            },
+        }
+    }
+}
+
 // ===========================================================================
 // Bounds (resource limits are first-class)
 // ===========================================================================
@@ -252,7 +277,7 @@ impl Block {
     pub fn content_hash(&self) -> String {
         let value =
             serde_json::to_value(&self.payload).expect("BlockKind serialization is infallible");
-        sha256_hex(&canonical_json_string(&value))
+        json_content_hash(&value)
     }
 
     /// Render the human-facing form from the same typed value the machine
@@ -266,6 +291,15 @@ impl Block {
 // ===========================================================================
 // Canonical JSON + SHA-256 (replay hashing)
 // ===========================================================================
+
+/// SHA-256 (hex) of the canonical form of any JSON value — object keys
+/// recursively sorted, so semantically equal values hash identically
+/// regardless of map insertion order. Tools use this for `input_hash` and
+/// other replay pins.
+#[must_use]
+pub fn json_content_hash(value: &Value) -> String {
+    sha256_hex(&canonical_json_string(value))
+}
 
 /// Serialize a value with object keys recursively sorted, so semantically
 /// equal payloads hash identically regardless of map insertion order.
@@ -367,8 +401,8 @@ mod tests {
     }
 
     #[test]
-    fn schema_version_default_is_envelope_v1() {
-        assert_eq!(SchemaVersion::default().as_str(), "lonis.envelope/v1");
+    fn schema_version_default_is_tool_protocol_v1() {
+        assert_eq!(SchemaVersion::default().as_str(), "lonis.tool/v1");
     }
 
     // -- Attribution --
@@ -458,6 +492,26 @@ mod tests {
     }
 
     // -- Block --
+
+    #[test]
+    fn attribution_new_stamps_rfc3339_now() {
+        let attr = Attribution::new("dominic", "lonis:test:fixture");
+        assert_eq!(attr.identity, "dominic");
+        assert_eq!(attr.provenance.producer, "lonis:test:fixture");
+        assert!(attr.viewpoint.is_none());
+        assert!(attr.provenance.location.is_none());
+        // RFC 3339 shape: yyyy-mm-ddThh:mm:ss…
+        let when = &attr.provenance.when;
+        assert!(when.len() >= 20 && when.contains('T') && when.contains(':'));
+    }
+
+    #[test]
+    fn json_content_hash_is_public_and_canonical() {
+        let a = json_content_hash(&json!({"x": 1, "y": {"p": 1, "q": 2}}));
+        let b = json_content_hash(&json!({"y": {"q": 2, "p": 1}, "x": 1}));
+        assert_eq!(a, b);
+        assert_eq!(a.len(), 64);
+    }
 
     #[test]
     fn block_wire_shape_is_flat_with_doctrine_keys() {

@@ -6,22 +6,21 @@
 //! Minimal harness runtime for Lonis tools, building on [`lonis_schema`]:
 //!
 //! - the callable [`Tool`] trait ([`Capabilities`] + a uniform JSON-typed
-//!   [`Tool::invoke`] boundary),
+//!   [`Tool::invoke`] boundary returning [`Block`]s — ADR-0001),
 //! - an in-process [`ToolRegistry`],
-//! - envelope/error rendering per [`OutputMode`] ([`render`] / [`render_error`]),
-//! - and [`run_tool`], which enforces the amari split: a success [`Envelope`]
-//!   goes to **stdout**, a structured [`ToolError`] goes to **stderr** with its
+//! - block/error rendering per [`OutputMode`] ([`render`] / [`render_error`]),
+//! - and [`run_tool`], which enforces the amari split: success [`Block`]s go
+//!   to **stdout**, a structured [`ToolError`] goes to **stderr** with its
 //!   exit code.
 //!
-//! See `docs/plans/lonis-schema-design.md` (decision #1) for the stdout/stderr
-//! split this runtime enforces.
+//! See `docs/adr/0001-block-contract.md` for the output contract.
 
 #![forbid(unsafe_code)]
 
 use std::collections::BTreeMap;
 use std::io::Write;
 
-use lonis_schema::{exit_code, Capabilities, Envelope, OutputMode, ToolContract, ToolError};
+use lonis_schema::{exit_code, Block, Capabilities, OutputMode, ToolContract, ToolError};
 
 // ===========================================================================
 // Tool trait
@@ -30,16 +29,18 @@ use lonis_schema::{exit_code, Capabilities, Envelope, OutputMode, ToolContract, 
 /// A callable Lonis tool: [`Capabilities`] (self-description) plus a uniform
 /// JSON-typed [`Tool::invoke`] boundary.
 ///
-/// Tools accept [`serde_json::Value`] input and return a success [`Envelope`]
-/// (rendered on stdout) or a [`ToolError`] (rendered on stderr). A typed tool
-/// deserializes the input into its own request type and serializes its result
-/// into the envelope payload.
+/// Tools accept [`serde_json::Value`] input and return the [`Block`]s they
+/// emit (rendered on stdout) or a [`ToolError`] (rendered on stderr). A tool
+/// may emit zero, one, or many blocks: a single `result`, or a
+/// `message` + `evidence` + `result` stream (ADR-0001). A typed tool
+/// deserializes the input into its own request type and builds typed block
+/// payloads.
 pub trait Tool: Capabilities {
     /// Invoke the tool.
     ///
     /// # Errors
     /// Returns a [`ToolError`] (serialized to stderr) on failure.
-    fn invoke(&self, input: serde_json::Value) -> Result<Envelope<serde_json::Value>, ToolError>;
+    fn invoke(&self, input: serde_json::Value) -> Result<Vec<Block>, ToolError>;
 
     /// The tool's declared contract, if any (used by `lonis tools describe`).
     ///
@@ -116,11 +117,7 @@ impl ToolRegistry {
     /// # Errors
     /// [`ToolError`] with kind `not_found` (exit code 3) if the id is unknown;
     /// otherwise the tool's own error.
-    pub fn invoke(
-        &self,
-        id: &str,
-        input: serde_json::Value,
-    ) -> Result<Envelope<serde_json::Value>, ToolError> {
+    pub fn invoke(&self, id: &str, input: serde_json::Value) -> Result<Vec<Block>, ToolError> {
         match self.tools.get(id) {
             Some(tool) => tool.invoke(input),
             None => Err(ToolError::new(
@@ -136,25 +133,31 @@ impl ToolRegistry {
 // Rendering (amari split)
 // ===========================================================================
 
-/// Render a success [`Envelope`] to `w` according to `mode`.
+/// Render success [`Block`]s to `w` according to `mode`.
+///
+/// - `Json` emits one JSON array of blocks (stable machine shape, even for a
+///   single block),
+/// - `Ndjson` emits one block per line (parity with amari-discovery's
+///   streaming mode),
+/// - `Human` emits each block's `render_human` line.
 ///
 /// # Errors
 /// Propagates serialization/IO errors.
-pub fn render<W: Write>(
-    env: &Envelope<serde_json::Value>,
-    mode: OutputMode,
-    w: &mut W,
-) -> std::io::Result<()> {
+pub fn render<W: Write>(blocks: &[Block], mode: OutputMode, w: &mut W) -> std::io::Result<()> {
     match mode {
-        OutputMode::Json | OutputMode::Ndjson => {
-            writeln!(w, "{}", serde_json::to_string(env).map_err(io_err)?)
+        OutputMode::Json => writeln!(w, "{}", serde_json::to_string(blocks).map_err(io_err)?),
+        OutputMode::Ndjson => {
+            for block in blocks {
+                writeln!(w, "{}", serde_json::to_string(block).map_err(io_err)?)?;
+            }
+            Ok(())
         }
-        OutputMode::Human => writeln!(
-            w,
-            "[{}] {}",
-            env.tool.as_str(),
-            serde_json::to_string_pretty(&env.result).map_err(io_err)?
-        ),
+        OutputMode::Human => {
+            for block in blocks {
+                writeln!(w, "{}", block.render_human())?;
+            }
+            Ok(())
+        }
     }
 }
 
@@ -172,10 +175,11 @@ pub fn render_error<W: Write>(err: &ToolError, mode: OutputMode, w: &mut W) -> s
     }
 }
 
-/// Run a tool from a registry, rendering success to stdout and the structured
-/// error to stderr with the tool's exit code. Returns the process exit code.
+/// Run a tool from a registry, rendering success blocks to stdout and the
+/// structured error to stderr with the tool's exit code. Returns the process
+/// exit code.
 ///
-/// This is the amari split (decision #1): a parseable [`Envelope`] always on
+/// This is the amari split (decision #1): parseable [`Block`]s always on
 /// stdout, diagnostics always on stderr.
 #[must_use]
 pub fn run_tool(
@@ -185,7 +189,7 @@ pub fn run_tool(
     mode: OutputMode,
 ) -> u8 {
     match registry.invoke(id, input) {
-        Ok(env) => match render(&env, mode, &mut std::io::stdout()) {
+        Ok(blocks) => match render(&blocks, mode, &mut std::io::stdout()) {
             Ok(()) => exit_code::SUCCESS,
             Err(_) => exit_code::GENERIC,
         },
@@ -204,7 +208,10 @@ fn io_err(e: serde_json::Error) -> std::io::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lonis_schema::{exit_code, Capabilities, Envelope, OutputMode, SchemaVersion, ToolId};
+    use lonis_schema::block::kinds::{BlockKind, Message, ResultPayload};
+    use lonis_schema::{
+        exit_code, Attribution, Block, Capabilities, OutputMode, SchemaVersion, ToolId,
+    };
 
     // --- a test echo tool ---
 
@@ -214,6 +221,10 @@ mod tests {
         ("ok", exit_code::SUCCESS),
         ("bad_input", exit_code::INVALID_INPUT),
     ];
+
+    fn attribution(id: &ToolId) -> Attribution {
+        Attribution::new(id.as_str(), id.as_str())
+    }
 
     impl Capabilities for Echo {
         fn schema_version(&self) -> SchemaVersion {
@@ -234,10 +245,7 @@ mod tests {
     }
 
     impl Tool for Echo {
-        fn invoke(
-            &self,
-            input: serde_json::Value,
-        ) -> Result<Envelope<serde_json::Value>, ToolError> {
+        fn invoke(&self, input: serde_json::Value) -> Result<Vec<Block>, ToolError> {
             if input.is_null() {
                 return Err(ToolError::new(
                     "bad_input",
@@ -245,7 +253,29 @@ mod tests {
                     exit_code::INVALID_INPUT,
                 ));
             }
-            Ok(Envelope::new(self.tool_id(), input))
+            let id = self.tool_id();
+            Ok(vec![
+                Block::new(
+                    attribution(&id),
+                    BlockKind::Message(Message {
+                        role: Some("tool".into()),
+                        content: "echoing".into(),
+                        reply_to: None,
+                    }),
+                ),
+                Block::new(
+                    attribution(&id),
+                    BlockKind::Result(ResultPayload {
+                        output: input,
+                        score: None,
+                        evidence: Vec::new(),
+                        validated_assumptions: Vec::new(),
+                        refuted_assumptions: Vec::new(),
+                        resources: None,
+                        duration_micros: None,
+                    }),
+                ),
+            ])
         }
     }
 
@@ -286,13 +316,15 @@ mod tests {
     // --- invoke ---
 
     #[test]
-    fn invoke_returns_envelope() {
+    fn invoke_returns_blocks() {
         let reg = build_reg();
-        let env = reg
+        let blocks = reg
             .invoke("lonis:test:echo", serde_json::json!({"hi": 1}))
             .unwrap();
-        assert_eq!(env.tool.as_str(), "lonis:test:echo");
-        assert_eq!(env.result, serde_json::json!({"hi": 1}));
+        assert_eq!(blocks.len(), 2);
+        assert_eq!(blocks[0].payload().kind_name(), "message");
+        assert_eq!(blocks[1].payload().kind_name(), "result");
+        assert_eq!(blocks[1].attribution.provenance.producer, "lonis:test:echo");
     }
 
     #[test]
@@ -317,31 +349,42 @@ mod tests {
 
     // --- render ---
 
-    #[test]
-    fn render_json_round_trips() {
-        let env = Envelope::new(
-            ToolId::new("lonis:test:echo").unwrap(),
-            serde_json::json!({"a": 1}),
-        );
-        let mut buf = Vec::new();
-        render(&env, OutputMode::Json, &mut buf).unwrap();
-        let parsed: Envelope<serde_json::Value> =
-            serde_json::from_str(std::str::from_utf8(&buf).unwrap().trim()).unwrap();
-        assert_eq!(parsed.result, serde_json::json!({"a": 1}));
-        assert_eq!(parsed.tool.as_str(), "lonis:test:echo");
+    fn echo_blocks() -> Vec<Block> {
+        Echo.invoke(serde_json::json!({"a": 1})).unwrap()
     }
 
     #[test]
-    fn render_human_is_pretty() {
-        let env = Envelope::new(
-            ToolId::new("lonis:test:echo").unwrap(),
-            serde_json::json!({"a": 1}),
-        );
+    fn render_json_emits_array_of_blocks() {
+        let blocks = echo_blocks();
         let mut buf = Vec::new();
-        render(&env, OutputMode::Human, &mut buf).unwrap();
-        let s = String::from_utf8(buf).unwrap();
-        assert!(s.contains("[lonis:test:echo]"));
-        assert!(s.contains("\"a\": 1"));
+        render(&blocks, OutputMode::Json, &mut buf).unwrap();
+        let parsed: Vec<Block> =
+            serde_json::from_str(std::str::from_utf8(&buf).unwrap().trim()).unwrap();
+        assert_eq!(parsed, blocks);
+    }
+
+    #[test]
+    fn render_ndjson_emits_one_block_per_line() {
+        let blocks = echo_blocks();
+        let mut buf = Vec::new();
+        render(&blocks, OutputMode::Ndjson, &mut buf).unwrap();
+        let text = String::from_utf8(buf).unwrap();
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 2);
+        for (line, block) in lines.iter().zip(&blocks) {
+            let parsed: Block = serde_json::from_str(line).unwrap();
+            assert_eq!(&parsed, block);
+        }
+    }
+
+    #[test]
+    fn render_human_uses_render_human_per_block() {
+        let blocks = echo_blocks();
+        let mut buf = Vec::new();
+        render(&blocks, OutputMode::Human, &mut buf).unwrap();
+        let text = String::from_utf8(buf).unwrap();
+        assert!(text.contains("message: echoing"));
+        assert!(text.contains("result:"));
     }
 
     #[test]

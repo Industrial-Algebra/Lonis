@@ -1,14 +1,14 @@
 // Copyright (C) 2026 Industrial Algebra
 // SPDX-License-Identifier: Apache-2.0
 
-//! End-to-end CLI tests: exercise the amari split (stdout envelope / stderr
+//! End-to-end CLI tests: exercise the amari split (stdout blocks / stderr
 //! error) through the real `lonis` binary.
 
 use assert_cmd::Command;
-use lonis_schema::Envelope;
+use lonis_schema::Block;
 
 #[test]
-fn call_echo_emits_envelope_on_stdout() {
+fn call_echo_emits_block_array_on_stdout() {
     let output = Command::cargo_bin("lonis")
         .unwrap()
         .args([
@@ -25,9 +25,61 @@ fn call_echo_emits_envelope_on_stdout() {
         "stderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let env: Envelope<serde_json::Value> = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(env.tool.as_str(), "lonis:builtin:echo");
-    assert_eq!(env.result, serde_json::json!({"hello": "world"}));
+    let blocks: Vec<Block> = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(blocks.len(), 1);
+    assert_eq!(blocks[0].payload().kind_name(), "result");
+    assert_eq!(
+        blocks[0].attribution.provenance.producer,
+        "lonis:builtin:echo"
+    );
+    let wire = serde_json::to_value(&blocks[0]).unwrap();
+    assert_eq!(
+        wire["payload"]["data"]["output"],
+        serde_json::json!({"hello": "world"})
+    );
+    // Replay provenance: the echo tool hashes its input.
+    assert!(wire["provenance"]["input_hash"].is_string());
+    assert_eq!(wire["schema_version"], "lonis.block/v1");
+}
+
+#[test]
+fn call_echo_ndjson_emits_one_block_per_line() {
+    let output = Command::cargo_bin("lonis")
+        .unwrap()
+        .args(["call", "lonis:builtin:echo", "[1,2]", "--mode", "ndjson"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let text = String::from_utf8(output.stdout).unwrap();
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.len(), 1);
+    let block: Block = serde_json::from_str(lines[0]).unwrap();
+    assert_eq!(block.payload().kind_name(), "result");
+}
+
+#[test]
+fn call_echo_accepts_at_file_input() {
+    let mut tmp = std::env::temp_dir();
+    tmp.push("lonis-cli-test-input.json");
+    std::fs::write(&tmp, "{\"from\":\"file\"}").unwrap();
+    let arg = format!("@{}", tmp.display());
+    let output = Command::cargo_bin("lonis")
+        .unwrap()
+        .args(["call", "lonis:builtin:echo", &arg, "--mode", "json"])
+        .output()
+        .unwrap();
+    std::fs::remove_file(&tmp).ok();
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let blocks: Vec<Block> = serde_json::from_slice(&output.stdout).unwrap();
+    let wire = serde_json::to_value(&blocks[0]).unwrap();
+    assert_eq!(
+        wire["payload"]["data"]["output"],
+        serde_json::json!({"from": "file"})
+    );
 }
 
 #[test]

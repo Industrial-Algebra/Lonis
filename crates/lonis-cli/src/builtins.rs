@@ -5,9 +5,10 @@
 //! `lonis:builtin:version`.
 
 use lonis_core::{Tool, ToolRegistry};
+use lonis_schema::block::kinds::{BlockKind, ResultPayload};
 use lonis_schema::{
-    exit_code, Capabilities, Cost, Determinism, Envelope, OutputMode, SchemaRef, SchemaVersion,
-    SideEffects, ToolContract, ToolError, ToolId,
+    exit_code, json_content_hash, Attribution, Block, Capabilities, Cost, Determinism, OutputMode,
+    ReplayProvenance, SchemaRef, SchemaVersion, SideEffects, ToolContract, ToolError, ToolId,
 };
 
 const FMTS: [OutputMode; 3] = [OutputMode::Human, OutputMode::Json, OutputMode::Ndjson];
@@ -24,6 +25,33 @@ pub fn registry() -> ToolRegistry {
         .register(Box::new(Version))
         .expect("register version");
     registry
+}
+
+/// Build a single `result` block attributed to `tool`, with replay
+/// provenance (tool version + canonical input hash).
+fn result_block(
+    tool: &dyn Capabilities,
+    output: serde_json::Value,
+    input_hash: Option<String>,
+) -> Block {
+    let id = tool.tool_id();
+    Block::new(
+        Attribution::new(id.as_str(), id.as_str()),
+        BlockKind::Result(ResultPayload {
+            output,
+            score: None,
+            evidence: Vec::new(),
+            validated_assumptions: Vec::new(),
+            refuted_assumptions: Vec::new(),
+            resources: None,
+            duration_micros: None,
+        }),
+    )
+    .with_provenance(ReplayProvenance {
+        tool_version: Some(tool.tool_version().to_owned()),
+        input_hash,
+        ..ReplayProvenance::default()
+    })
 }
 
 struct Echo;
@@ -47,7 +75,7 @@ impl Capabilities for Echo {
 }
 
 impl Tool for Echo {
-    fn invoke(&self, input: serde_json::Value) -> Result<Envelope<serde_json::Value>, ToolError> {
+    fn invoke(&self, input: serde_json::Value) -> Result<Vec<Block>, ToolError> {
         if input.is_null() {
             return Err(ToolError::new(
                 "bad_input",
@@ -55,7 +83,8 @@ impl Tool for Echo {
                 exit_code::INVALID_INPUT,
             ));
         }
-        Ok(Envelope::new(self.tool_id(), input))
+        let input_hash = json_content_hash(&input);
+        Ok(vec![result_block(self, input, Some(input_hash))])
     }
 
     fn contract(&self) -> Option<ToolContract> {
@@ -93,14 +122,15 @@ impl Capabilities for Version {
 }
 
 impl Tool for Version {
-    fn invoke(&self, _input: serde_json::Value) -> Result<Envelope<serde_json::Value>, ToolError> {
-        Ok(Envelope::new(
-            self.tool_id(),
+    fn invoke(&self, _input: serde_json::Value) -> Result<Vec<Block>, ToolError> {
+        Ok(vec![result_block(
+            self,
             serde_json::json!({
                 "lonis": env!("CARGO_PKG_VERSION"),
                 "schema": SchemaVersion::default().as_str(),
             }),
-        ))
+            None,
+        )])
     }
 
     fn contract(&self) -> Option<ToolContract> {
