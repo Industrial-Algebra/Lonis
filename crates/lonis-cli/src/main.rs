@@ -54,11 +54,12 @@ enum Command {
         #[command(subcommand)]
         action: ToolsAction,
     },
-    /// Invoke a tool by id. INPUT is a JSON value; if omitted, JSON is read from stdin.
+    /// Invoke a tool by id. INPUT is a JSON value, or `@<path>` to read JSON
+    /// from a file; if omitted, JSON is read from stdin.
     Call {
         /// Tool id (`<tool>:<namespace>:<item>`).
         id: String,
-        /// JSON input value.
+        /// JSON input value, or `@<path>` to a JSON file.
         input: Option<String>,
     },
 }
@@ -122,9 +123,16 @@ fn main() -> ExitCode {
     }
 }
 
-/// Parse JSON input from an explicit argument or stdin (empty stdin → null).
+/// Parse JSON input from an explicit argument, an `@<path>` file reference,
+/// or stdin (empty stdin → null).
 fn parse_input(input: Option<&str>) -> Result<serde_json::Value, String> {
     match input {
+        Some(text) if text.starts_with('@') => {
+            let path = &text[1..];
+            let contents = std::fs::read_to_string(path)
+                .map_err(|err| format!("cannot read input file `{path}`: {err}"))?;
+            serde_json::from_str(contents.trim()).map_err(|err| err.to_string())
+        }
         Some(text) => serde_json::from_str(text).map_err(|err| err.to_string()),
         None => {
             let mut buf = String::new();
