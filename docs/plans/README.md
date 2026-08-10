@@ -7,11 +7,19 @@ This directory contains both the original Lonis planning documents and the newer
 ### If you want the current strategic picture
 Start here:
 
-1. `2026-03-28-lonis-external-provider-protocol-spec-v0.md`
+1. `2026-03-28-figma-first-slice-contract-pack.md`
+   - concrete first-slice contract target for the Rust Figma provider rewrite
+   - defines representative tool contracts, diagnostics schemas, and safety expectations
+
+2. `2026-03-28-figma-rust-provider-rewrite-strategy.md`
+   - decision record and kickoff strategy for rewriting the Figma surface as a Rust provider
+   - includes a ready-to-use prompt for another agent to begin the rewrite analysis
+
+3. `2026-03-28-lonis-external-provider-protocol-spec-v0.md`
    - executable-provider protocol draft for external tool surfaces
    - defines required provider subcommands, JSON wire format, stdout/stderr discipline, and exit semantics
 
-2. `2026-03-28-lonis-provider-interface-spec-v0.md`
+3. `2026-03-28-lonis-provider-interface-spec-v0.md`
    - first-pass provider/interface spec for how Lonis discovers, describes, and invokes tool surfaces
    - defines the canonical `lonis call <tool>` model and normalized envelopes
    - uses Perceptron and Figma as the key reference provider classes
@@ -90,11 +98,13 @@ The project direction now separates into:
 If you are new to the repo, read in this order:
 
 1. `../lonis-legacy-and-future-context.md`
-2. `2026-03-28-lonis-external-provider-protocol-spec-v0.md`
-3. `2026-03-28-lonis-provider-interface-spec-v0.md`
-4. `2026-03-28-lonis-figma-provider-mapping-draft.md`
-5. `2026-03-28-lonis-harness-design-draft.md`
-6. `2026-03-12-perceptron-design.md`
-7. `2026-03-28-lonis-legacy-archive-plan.md`
-8. `2026-03-06-lonis-design.md`
-9. `2026-03-06-lonis-implementation.md`
+2. `2026-03-28-figma-first-slice-contract-pack.md`
+3. `2026-03-28-figma-rust-provider-rewrite-strategy.md`
+4. `2026-03-28-lonis-external-provider-protocol-spec-v0.md`
+5. `2026-03-28-lonis-provider-interface-spec-v0.md`
+6. `2026-03-28-lonis-figma-provider-mapping-draft.md`
+7. `2026-03-28-lonis-harness-design-draft.md`
+8. `2026-03-12-perceptron-design.md`
+9. `2026-03-28-lonis-legacy-archive-plan.md`
+10. `2026-03-06-lonis-design.md`
+11. `2026-03-06-lonis-implementation.md`
