@@ -24,3 +24,4 @@ lonis-core = { version = "0.0.1", path = "crates/lonis-core" }
 lonis-derive = { version = "0.0.1", path = "crates/lonis-derive" }
 syn = "2"
 quote = "1"
+proc-macro2 = "1"
