@@ -1,0 +1,26 @@
+[package]
+name = "lonis"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Lonis umbrella facade — one crate for the contract, the derive, and the harness runtime"
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+default = ["core"]
+core = ["dep:lonis-core"]
+derive = ["lonis-schema/derive"]
+
+[dependencies]
+lonis-schema = { workspace = true }
+lonis-core = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+lonis = { path = ".", features = ["derive"] }
