@@ -20,27 +20,30 @@
 use std::collections::BTreeMap;
 use std::io::Write;
 
-use lonis_schema::{exit_code, Block, Capabilities, OutputMode, ToolContract, ToolError};
+use lonis_schema::{
+    exit_code, Block, BlockPayload, Capabilities, OutputMode, ToolContract, ToolError,
+};
 
 // ===========================================================================
 // Tool trait
 // ===========================================================================
 
 /// A callable Lonis tool: [`Capabilities`] (self-description) plus a uniform
-/// JSON-typed [`Tool::invoke`] boundary.
+/// JSON-typed [`Tool::invoke`] boundary, generic over its typed payload `P`
+/// (ADR-0002).
 ///
 /// Tools accept [`serde_json::Value`] input and return the [`Block`]s they
 /// emit (rendered on stdout) or a [`ToolError`] (rendered on stderr). A tool
-/// may emit zero, one, or many blocks: a single `result`, or a
-/// `message` + `evidence` + `result` stream (ADR-0001). A typed tool
-/// deserializes the input into its own request type and builds typed block
-/// payloads.
-pub trait Tool: Capabilities {
+/// may emit zero, one, or many blocks (ADR-0001). A vertical implements
+/// `Tool<MyPayload>` for each of its tools and gets a fully-typed,
+/// homogeneous registry; the umbrella host instantiates `P = BlockKind` and
+/// erases only across subprocess JSON channels.
+pub trait Tool<P: BlockPayload>: Capabilities {
     /// Invoke the tool.
     ///
     /// # Errors
     /// Returns a [`ToolError`] (serialized to stderr) on failure.
-    fn invoke(&self, input: serde_json::Value) -> Result<Vec<Block>, ToolError>;
+    fn invoke(&self, input: serde_json::Value) -> Result<Vec<Block<P>>, ToolError>;
 
     /// The tool's declared contract, if any (used by `lonis tools describe`).
     ///
@@ -55,16 +58,24 @@ pub trait Tool: Capabilities {
 // Registry
 // ===========================================================================
 
-/// Registry of in-process tools, keyed by tool id.
+/// Registry of in-process tools, keyed by tool id, homogeneous in the
+/// payload type `P` (ADR-0002: a vertical's registry is fully typed).
 ///
 /// Deterministic iteration order (sorted by id) so `lonis tools list` and tests
 /// are stable.
-#[derive(Default)]
-pub struct ToolRegistry {
-    tools: BTreeMap<String, Box<dyn Tool>>,
+pub struct ToolRegistry<P: BlockPayload> {
+    tools: BTreeMap<String, Box<dyn Tool<P>>>,
 }
 
-impl ToolRegistry {
+impl<P: BlockPayload> Default for ToolRegistry<P> {
+    fn default() -> Self {
+        Self {
+            tools: BTreeMap::new(),
+        }
+    }
+}
+
+impl<P: BlockPayload> ToolRegistry<P> {
     /// Construct an empty registry.
     #[must_use]
     pub fn new() -> Self {
@@ -76,7 +87,7 @@ impl ToolRegistry {
     /// # Errors
     /// Returns a [`ToolError`] with kind `already_registered` if a tool with the
     /// same id is already present.
-    pub fn register(&mut self, tool: Box<dyn Tool>) -> Result<(), ToolError> {
+    pub fn register(&mut self, tool: Box<dyn Tool<P>>) -> Result<(), ToolError> {
         let id = tool.tool_id();
         if self.tools.contains_key(id.as_str()) {
             return Err(ToolError::new(
@@ -91,12 +102,12 @@ impl ToolRegistry {
 
     /// Look up a tool by id.
     #[must_use]
-    pub fn get(&self, id: &str) -> Option<&dyn Tool> {
+    pub fn get(&self, id: &str) -> Option<&dyn Tool<P>> {
         self.tools.get(id).map(std::ops::Deref::deref)
     }
 
     /// Iterate registered tools (sorted by id).
-    pub fn iter(&self) -> impl Iterator<Item = (&str, &dyn Tool)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &dyn Tool<P>)> {
         self.tools.iter().map(|(k, v)| (k.as_str(), v.as_ref()))
     }
 
@@ -117,7 +128,7 @@ impl ToolRegistry {
     /// # Errors
     /// [`ToolError`] with kind `not_found` (exit code 3) if the id is unknown;
     /// otherwise the tool's own error.
-    pub fn invoke(&self, id: &str, input: serde_json::Value) -> Result<Vec<Block>, ToolError> {
+    pub fn invoke(&self, id: &str, input: serde_json::Value) -> Result<Vec<Block<P>>, ToolError> {
         match self.tools.get(id) {
             Some(tool) => tool.invoke(input),
             None => Err(ToolError::new(
@@ -143,7 +154,11 @@ impl ToolRegistry {
 ///
 /// # Errors
 /// Propagates serialization/IO errors.
-pub fn render<W: Write>(blocks: &[Block], mode: OutputMode, w: &mut W) -> std::io::Result<()> {
+pub fn render<P: BlockPayload, W: Write>(
+    blocks: &[Block<P>],
+    mode: OutputMode,
+    w: &mut W,
+) -> std::io::Result<()> {
     match mode {
         OutputMode::Json => writeln!(w, "{}", serde_json::to_string(blocks).map_err(io_err)?),
         OutputMode::Ndjson => {
@@ -182,8 +197,8 @@ pub fn render_error<W: Write>(err: &ToolError, mode: OutputMode, w: &mut W) -> s
 /// This is the amari split (decision #1): parseable [`Block`]s always on
 /// stdout, diagnostics always on stderr.
 #[must_use]
-pub fn run_tool(
-    registry: &ToolRegistry,
+pub fn run_tool<P: BlockPayload>(
+    registry: &ToolRegistry<P>,
     id: &str,
     input: serde_json::Value,
     mode: OutputMode,
@@ -210,7 +225,7 @@ mod tests {
     use super::*;
     use lonis_schema::block::kinds::{BlockKind, Message, ResultPayload};
     use lonis_schema::{
-        exit_code, Attribution, Block, Capabilities, OutputMode, SchemaVersion, ToolId,
+        exit_code, Attribution, Capabilities, OutputMode, SchemaVersion, SeedBlock, ToolId,
     };
 
     // --- a test echo tool ---
@@ -244,8 +259,8 @@ mod tests {
         }
     }
 
-    impl Tool for Echo {
-        fn invoke(&self, input: serde_json::Value) -> Result<Vec<Block>, ToolError> {
+    impl Tool<BlockKind> for Echo {
+        fn invoke(&self, input: serde_json::Value) -> Result<Vec<SeedBlock>, ToolError> {
             if input.is_null() {
                 return Err(ToolError::new(
                     "bad_input",
@@ -279,7 +294,7 @@ mod tests {
         }
     }
 
-    fn build_reg() -> ToolRegistry {
+    fn build_reg() -> ToolRegistry<BlockKind> {
         let mut reg = ToolRegistry::new();
         reg.register(Box::new(Echo)).unwrap();
         reg
@@ -349,7 +364,7 @@ mod tests {
 
     // --- render ---
 
-    fn echo_blocks() -> Vec<Block> {
+    fn echo_blocks() -> Vec<SeedBlock> {
         Echo.invoke(serde_json::json!({"a": 1})).unwrap()
     }
 
@@ -358,7 +373,7 @@ mod tests {
         let blocks = echo_blocks();
         let mut buf = Vec::new();
         render(&blocks, OutputMode::Json, &mut buf).unwrap();
-        let parsed: Vec<Block> =
+        let parsed: Vec<SeedBlock> =
             serde_json::from_str(std::str::from_utf8(&buf).unwrap().trim()).unwrap();
         assert_eq!(parsed, blocks);
     }
@@ -372,7 +387,7 @@ mod tests {
         let lines: Vec<&str> = text.lines().collect();
         assert_eq!(lines.len(), 2);
         for (line, block) in lines.iter().zip(&blocks) {
-            let parsed: Block = serde_json::from_str(line).unwrap();
+            let parsed: SeedBlock = serde_json::from_str(line).unwrap();
             assert_eq!(&parsed, block);
         }
     }

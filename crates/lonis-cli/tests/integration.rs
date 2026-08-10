@@ -5,7 +5,7 @@
 //! error) through the real `lonis` binary.
 
 use assert_cmd::Command;
-use lonis_schema::Block;
+use lonis_schema::SeedBlock;
 
 #[test]
 fn call_echo_emits_block_array_on_stdout() {
@@ -25,7 +25,7 @@ fn call_echo_emits_block_array_on_stdout() {
         "stderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let blocks: Vec<Block> = serde_json::from_slice(&output.stdout).unwrap();
+    let blocks: Vec<SeedBlock> = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(blocks.len(), 1);
     assert_eq!(blocks[0].payload().kind_name(), "result");
     assert_eq!(
@@ -53,7 +53,7 @@ fn call_echo_ndjson_emits_one_block_per_line() {
     let text = String::from_utf8(output.stdout).unwrap();
     let lines: Vec<&str> = text.lines().collect();
     assert_eq!(lines.len(), 1);
-    let block: Block = serde_json::from_str(lines[0]).unwrap();
+    let block: SeedBlock = serde_json::from_str(lines[0]).unwrap();
     assert_eq!(block.payload().kind_name(), "result");
 }
 
@@ -74,7 +74,7 @@ fn call_echo_accepts_at_file_input() {
         "stderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let blocks: Vec<Block> = serde_json::from_slice(&output.stdout).unwrap();
+    let blocks: Vec<SeedBlock> = serde_json::from_slice(&output.stdout).unwrap();
     let wire = serde_json::to_value(&blocks[0]).unwrap();
     assert_eq!(
         wire["payload"]["data"]["output"],

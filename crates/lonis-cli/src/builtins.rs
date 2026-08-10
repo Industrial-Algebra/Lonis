@@ -7,8 +7,9 @@
 use lonis_core::{Tool, ToolRegistry};
 use lonis_schema::block::kinds::{BlockKind, ResultPayload};
 use lonis_schema::{
-    exit_code, json_content_hash, Attribution, Block, Capabilities, Cost, Determinism, OutputMode,
-    ReplayProvenance, SchemaRef, SchemaVersion, SideEffects, ToolContract, ToolError, ToolId,
+    exit_code, json_content_hash, Attribution, Capabilities, Cost, Determinism, OutputMode,
+    ReplayProvenance, SchemaRef, SchemaVersion, SeedBlock, SideEffects, ToolContract, ToolError,
+    ToolId,
 };
 
 const FMTS: [OutputMode; 3] = [OutputMode::Human, OutputMode::Json, OutputMode::Ndjson];
@@ -18,7 +19,7 @@ const MAP: &[(&str, u8)] = &[
 ];
 
 /// Build a registry preloaded with the built-in tools.
-pub fn registry() -> ToolRegistry {
+pub fn registry() -> ToolRegistry<BlockKind> {
     let mut registry = ToolRegistry::new();
     registry.register(Box::new(Echo)).expect("register echo");
     registry
@@ -33,9 +34,9 @@ fn result_block(
     tool: &dyn Capabilities,
     output: serde_json::Value,
     input_hash: Option<String>,
-) -> Block {
+) -> SeedBlock {
     let id = tool.tool_id();
-    Block::new(
+    SeedBlock::new(
         Attribution::new(id.as_str(), id.as_str()),
         BlockKind::Result(ResultPayload {
             output,
@@ -74,8 +75,8 @@ impl Capabilities for Echo {
     }
 }
 
-impl Tool for Echo {
-    fn invoke(&self, input: serde_json::Value) -> Result<Vec<Block>, ToolError> {
+impl Tool<BlockKind> for Echo {
+    fn invoke(&self, input: serde_json::Value) -> Result<Vec<SeedBlock>, ToolError> {
         if input.is_null() {
             return Err(ToolError::new(
                 "bad_input",
@@ -121,8 +122,8 @@ impl Capabilities for Version {
     }
 }
 
-impl Tool for Version {
-    fn invoke(&self, _input: serde_json::Value) -> Result<Vec<Block>, ToolError> {
+impl Tool<BlockKind> for Version {
+    fn invoke(&self, _input: serde_json::Value) -> Result<Vec<SeedBlock>, ToolError> {
         Ok(vec![result_block(
             self,
             serde_json::json!({
