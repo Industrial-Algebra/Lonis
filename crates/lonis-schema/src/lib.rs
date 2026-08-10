@@ -14,11 +14,24 @@
 //! - the structured [`ToolError`] (on stderr),
 //! - [`OutputMode`] (human / json / ndjson),
 //! - the [`Capabilities`] self-description trait,
-//! - and the [`ToolContract`] a tool/probe declares.
+//! - the [`ToolContract`] a tool/probe declares,
+//! - and the [`Block`] contract (doctrine §2.7) — the canonical structured
+//!   domain object every tool emits through, with the 14-kind seed corpus
+//!   ([`block::BlockKind`]), attribution, bounds, replay provenance, content
+//!   hashing, and render-parity.
 //!
-//! See `docs/plans/lonis-schema-design.md` for the design decisions.
+//! See `docs/plans/lonis-schema-design.md` and `docs/adr/0001-block-contract.md`
+//! for the design decisions.
 
 #![forbid(unsafe_code)]
+
+pub mod block;
+
+pub use block::kinds::{BlockCategory, BlockKind};
+pub use block::{
+    Attribution, AttributionSource, Block, BlockBounds, Compatibility, ReplayMetadata,
+    ReplayProvenance, BLOCK_SCHEMA_V1,
+};
 
 /// Re-export the `LonisCapabilities` derive (behind the `derive` feature).
 #[cfg(feature = "derive")]
@@ -47,30 +60,82 @@ pub enum OutputMode {
 }
 
 // ===========================================================================
-// Schema version
+// Schema version (namespaced string protocol marker: <name>/v<N>)
 // ===========================================================================
 
-/// A versioned schema identifier pinned on every envelope so consumers can
-/// branch on shape.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct SchemaVersion(pub u32);
+/// The default protocol marker for the Lonis tool envelope shape.
+pub const ENVELOPE_SCHEMA_V1: &str = "lonis.envelope/v1";
+
+/// A versioned protocol marker of the form `<name>/v<N>` (e.g.
+/// `lonis.envelope/v1`, `lonis.block/v1`, `amari.discovery/v1`), pinned on
+/// every envelope and block so consumers can branch on shape.
+///
+/// The namespaced string form generalizes amari-discovery's
+/// `amari.discovery/v1`: any vertical's protocol marker can be carried
+/// through the same slot, which is what allows amari-discovery's
+/// `protocol.rs` to eventually delete into `lonis-schema` (ADR-0001).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+#[serde(transparent)]
+pub struct SchemaVersion(String);
 
 impl SchemaVersion {
-    /// Construct a schema version.
-    #[must_use]
-    pub const fn new(v: u32) -> Self {
-        Self(v)
+    /// Parse a protocol marker, validating the canonical `<name>/v<N>` form.
+    ///
+    /// The name must be non-empty lowercase ASCII (digits, `.`, `-`, `_`
+    /// allowed), and the version suffix must be `v` followed by a positive
+    /// integer without leading zeros.
+    ///
+    /// # Errors
+    /// Returns [`SchemaVersionError`] if the marker is not canonical.
+    pub fn new(marker: impl Into<String>) -> Result<Self, SchemaVersionError> {
+        let marker = marker.into();
+        let (name, version) = marker
+            .rsplit_once('/')
+            .ok_or_else(|| SchemaVersionError::new(&marker))?;
+        let name_canonical = !name.is_empty()
+            && name.bytes().all(|b| {
+                b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'.' | b'-' | b'_')
+            });
+        let version_canonical = version.strip_prefix('v').is_some_and(|n| {
+            !n.is_empty() && !n.starts_with('0') && n.bytes().all(|b| b.is_ascii_digit())
+        });
+        if !name_canonical || !version_canonical {
+            return Err(SchemaVersionError::new(&marker));
+        }
+        Ok(Self(marker))
     }
-    /// The integer version.
+
+    /// The marker string.
     #[must_use]
-    pub const fn get(self) -> u32 {
-        self.0
+    pub fn as_str(&self) -> &str {
+        &self.0
     }
 }
 
 impl Default for SchemaVersion {
     fn default() -> Self {
-        Self::new(1)
+        Self(ENVELOPE_SCHEMA_V1.to_owned())
+    }
+}
+
+impl<'de> Deserialize<'de> for SchemaVersion {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Error as _;
+        SchemaVersion::new(String::deserialize(deserializer)?).map_err(D::Error::custom)
+    }
+}
+
+/// Errors from [`SchemaVersion::new`].
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("schema version `{0}` must be a canonical `<name>/v<N>` protocol marker")]
+pub struct SchemaVersionError(String);
+
+impl SchemaVersionError {
+    fn new(marker: &str) -> Self {
+        Self(marker.to_owned())
     }
 }
 
@@ -255,6 +320,18 @@ pub mod exit_code {
     pub const CONFIRMATION_REQUIRED: u8 = 4;
     /// Rate limited.
     pub const RATE_LIMITED: u8 = 5;
+    /// The tool failed to complete its operation.
+    pub const TOOL_FAILED: u8 = 6;
+    /// A declared resource limit was exceeded.
+    pub const LIMIT_EXCEEDED: u8 = 7;
+    /// An I/O failure.
+    pub const IO: u8 = 8;
+    /// A serialization / deserialization failure.
+    pub const SERIALIZATION: u8 = 9;
+    /// The operation is not implemented.
+    pub const NOT_IMPLEMENTED: u8 = 69;
+    /// An internal error.
+    pub const INTERNAL: u8 = 70;
 }
 
 // ===========================================================================

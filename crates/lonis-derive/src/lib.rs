@@ -4,7 +4,7 @@
 //! Procedural macros for Lonis tools.
 //!
 //! Currently provides [`LonisCapabilities`], which derives the
-//! [`lonis_schema::Capabilities`] self-description trait for a tool type from a
+//! `lonis_schema::Capabilities` self-description trait for a tool type from a
 //! `#[lonis(tool_id = "...")]` attribute — removing the five-method boilerplate
 //! every tool otherwise repeats (design decision #3: "traits +
 //! `#[lonis::tool]` derive").
@@ -18,7 +18,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, DeriveInput, LitStr};
 
-/// Derive [`lonis_schema::Capabilities`] for a tool type.
+/// Derive `lonis_schema::Capabilities` for a tool type.
 ///
 /// Requires a `#[lonis(tool_id = "<tool>:<namespace>:<item>")]` attribute. The
 /// derived impl uses sensible defaults: schema version 1, all three output

@@ -98,7 +98,7 @@ impl Tool for Version {
             self.tool_id(),
             serde_json::json!({
                 "lonis": env!("CARGO_PKG_VERSION"),
-                "schema": SchemaVersion::default().get(),
+                "schema": SchemaVersion::default().as_str(),
             }),
         ))
     }
