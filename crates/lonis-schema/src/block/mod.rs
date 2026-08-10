@@ -10,7 +10,7 @@
 //! from the same typed value). The payload is a [`BlockKind`] — the 14-kind
 //! seed corpus, extensible by domains.
 
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::SchemaVersion;
@@ -21,6 +21,32 @@ pub use kinds::BlockKind;
 
 /// The protocol marker for the v1 block contract.
 pub const BLOCK_SCHEMA_V1: &str = "lonis.block/v1";
+
+// ===========================================================================
+// BlockPayload — the typed-payload contract (ADR-0002)
+// ===========================================================================
+
+/// A typed block payload.
+///
+/// Typing matters in-process — a vertical's own code, its tests, and any
+/// library consumer; across a process/JSON boundary it is always JSON anyway.
+/// So a vertical defines its own payload enum (e.g. karpal-discovery's
+/// `KarpalPayload`) implementing this trait, and gets a fully-typed
+/// `Block<MyPayload>` / `ToolRegistry<MyPayload>` with zero erasure. Erasure
+/// only reappears at the umbrella host, where the boundary is a subprocess
+/// JSON channel and erasure is natural (ADR-0002).
+///
+/// The 14 seed kinds ([`BlockKind`]) implement this trait and serve as the
+/// seed payload; [`BlockKind::Extension`] covers the erased seam.
+pub trait BlockPayload: Serialize + DeserializeOwned + Send + Sync + 'static {
+    /// The wire discriminant (e.g. `message`, `karpal.capability`).
+    fn kind_name(&self) -> &str;
+    /// The stable `$id` of this payload kind (e.g. `lonis.block/message/v1`).
+    fn schema_id(&self) -> String;
+    /// Render the human-facing form (render-parity: from the same typed
+    /// value the machine form serializes from).
+    fn render_human(&self) -> String;
+}
 
 // ===========================================================================
 // Replay provenance (envelope-level; superset of amari-discovery's Provenance)
@@ -196,15 +222,21 @@ impl BlockBounds {
 // Block
 // ===========================================================================
 
-/// The canonical structured domain object (doctrine §2.7).
+/// The canonical structured domain object (doctrine §2.7), generic over its
+/// typed payload `P` (ADR-0002).
 ///
 /// The wire form is flat — the envelope properties (`schema_version`,
 /// `provenance`, `warnings`) sit alongside `attribution`, `bounds`, and the
 /// tagged `payload` — because the doctrine envelope's `data` *is* the
 /// payload, not a wrapper around it.
+///
+/// Verticals instantiate with their own payload enum for a fully-typed
+/// in-process contract; the umbrella host uses [`SeedBlock`] (or the
+/// [`BlockKind::Extension`] seam) where tools are reached across subprocess
+/// JSON channels.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Block {
+#[serde(deny_unknown_fields, bound = "P: BlockPayload")]
+pub struct Block<P: BlockPayload> {
     /// The block contract protocol marker (`lonis.block/v1`).
     pub schema_version: SchemaVersion,
     /// Replay provenance: hashes, seed, compatibility, replay requirements.
@@ -218,15 +250,19 @@ pub struct Block {
     /// First-class resource bounds.
     #[serde(default, skip_serializing_if = "BlockBounds::is_unbounded")]
     pub bounds: BlockBounds,
-    /// The typed payload: one of the 14 seed kinds, or a domain extension.
-    pub payload: BlockKind,
+    /// The typed payload: one of the 14 seed kinds, or a vertical's own
+    /// [`BlockPayload`] type.
+    pub payload: P,
 }
 
-impl Block {
+/// A block over the 14-kind seed payload — the umbrella host's type.
+pub type SeedBlock = Block<BlockKind>;
+
+impl<P: BlockPayload> Block<P> {
     /// Construct a block at the v1 contract with empty provenance, warnings,
     /// and bounds.
     #[must_use]
-    pub fn new(attribution: Attribution, payload: BlockKind) -> Self {
+    pub fn new(attribution: Attribution, payload: P) -> Self {
         Self {
             schema_version: SchemaVersion::new(BLOCK_SCHEMA_V1)
                 .expect("BLOCK_SCHEMA_V1 is canonical"),
@@ -261,7 +297,7 @@ impl Block {
 
     /// The payload.
     #[must_use]
-    pub const fn payload(&self) -> &BlockKind {
+    pub const fn payload(&self) -> &P {
         &self.payload
     }
 
@@ -350,7 +386,7 @@ mod tests {
         }
     }
 
-    fn message_block() -> Block {
+    fn message_block() -> Block<BlockKind> {
         Block::new(
             attribution(),
             BlockKind::Message(Message {
@@ -359,6 +395,90 @@ mod tests {
                 reply_to: None,
             }),
         )
+    }
+
+    // -- BlockPayload generics (ADR-0002) --
+
+    /// A vertical's own payload enum, à la karpal-discovery's `KarpalPayload`:
+    /// fully typed, no `Value` anywhere the vertical reaches.
+    #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+    #[serde(tag = "kind", rename_all = "snake_case")]
+    enum VerticalPayload {
+        Capability { record: String },
+        Search { results: Vec<String> },
+    }
+
+    impl BlockPayload for VerticalPayload {
+        fn kind_name(&self) -> &str {
+            match self {
+                Self::Capability { .. } => "capability",
+                Self::Search { .. } => "search",
+            }
+        }
+        fn schema_id(&self) -> String {
+            format!("lonis.block/vertical.{}/v1", self.kind_name())
+        }
+        fn render_human(&self) -> String {
+            match self {
+                Self::Capability { record } => format!("capability: {record}"),
+                Self::Search { results } => format!("search: {} result(s)", results.len()),
+            }
+        }
+    }
+
+    #[test]
+    fn block_kind_implements_block_payload() {
+        fn assert_impl<T: BlockPayload>() {}
+        assert_impl::<BlockKind>();
+    }
+
+    #[test]
+    fn vertical_payload_block_is_fully_typed_end_to_end() {
+        let block = Block::new(
+            attribution(),
+            VerticalPayload::Search {
+                results: vec!["karpal-proof".into()],
+            },
+        );
+        // Typed access — no to_value/from_value round-trip.
+        let Block {
+            payload: VerticalPayload::Search { results },
+            ..
+        } = &block
+        else {
+            panic!("expected a search payload")
+        };
+        assert_eq!(results, &vec!["karpal-proof".to_string()]);
+
+        let wire = serde_json::to_string(&block).unwrap();
+        let back: Block<VerticalPayload> = serde_json::from_str(&wire).unwrap();
+        assert_eq!(back, block);
+        assert_eq!(block.payload().kind_name(), "search");
+        assert_eq!(block.schema_id(), "lonis.block/vertical.search/v1");
+        assert!(block.render_human().contains("search"));
+        assert_eq!(block.content_hash().len(), 64);
+    }
+
+    #[test]
+    fn vertical_payload_wire_carries_its_own_tagged_form() {
+        let block = Block::new(
+            attribution(),
+            VerticalPayload::Capability {
+                record: "Proven".into(),
+            },
+        );
+        let wire = serde_json::to_value(&block).unwrap();
+        assert_eq!(
+            wire["payload"],
+            json!({"kind": "capability", "record": "Proven"})
+        );
+        assert_eq!(wire["schema_version"], json!("lonis.block/v1"));
+    }
+
+    #[test]
+    fn seed_block_alias_is_block_over_block_kind() {
+        let block: SeedBlock = message_block();
+        assert_eq!(block.payload().kind_name(), "message");
     }
 
     // -- SchemaVersion (namespaced string protocol marker) --
@@ -547,7 +667,7 @@ mod tests {
             })
             .with_warnings(vec!["truncated".into()]);
         let wire = serde_json::to_string(&block).unwrap();
-        let back: Block = serde_json::from_str(&wire).unwrap();
+        let back: Block<BlockKind> = serde_json::from_str(&wire).unwrap();
         assert_eq!(back, block);
     }
 
@@ -557,7 +677,7 @@ mod tests {
         wire.as_object_mut()
             .unwrap()
             .insert("bogus".into(), json!(1));
-        assert!(serde_json::from_value::<Block>(wire).is_err());
+        assert!(serde_json::from_value::<Block<BlockKind>>(wire).is_err());
     }
 
     #[test]

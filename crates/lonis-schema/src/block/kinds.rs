@@ -479,6 +479,18 @@ impl BlockKind {
     }
 }
 
+impl crate::block::BlockPayload for BlockKind {
+    fn kind_name(&self) -> &str {
+        self.kind_name()
+    }
+    fn schema_id(&self) -> String {
+        self.schema_id()
+    }
+    fn render_human(&self) -> String {
+        self.render_human()
+    }
+}
+
 impl Serialize for BlockKind {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where

@@ -29,7 +29,7 @@ pub mod block;
 pub use block::kinds::{BlockCategory, BlockKind};
 pub use block::{
     json_content_hash, now_rfc3339, Attribution, AttributionSource, Block, BlockBounds,
-    Compatibility, ReplayMetadata, ReplayProvenance, BLOCK_SCHEMA_V1,
+    BlockPayload, Compatibility, ReplayMetadata, ReplayProvenance, SeedBlock, BLOCK_SCHEMA_V1,
 };
 
 /// Re-export the `LonisCapabilities` derive (behind the `derive` feature).
