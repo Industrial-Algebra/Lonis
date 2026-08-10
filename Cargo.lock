@@ -248,7 +248,10 @@ name = "lonis-derive"
 version = "0.0.1"
 dependencies = [
  "lonis-schema",
+ "proc-macro2",
  "quote",
+ "serde",
+ "serde_json",
  "syn 2.0.119",
 ]
 

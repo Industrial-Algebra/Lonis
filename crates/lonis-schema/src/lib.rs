@@ -32,9 +32,9 @@ pub use block::{
     BlockPayload, Compatibility, ReplayMetadata, ReplayProvenance, SeedBlock, BLOCK_SCHEMA_V1,
 };
 
-/// Re-export the `LonisCapabilities` derive (behind the `derive` feature).
+/// Re-export the derives (behind the `derive` feature).
 #[cfg(feature = "derive")]
-pub use lonis_derive::LonisCapabilities;
+pub use lonis_derive::{BlockPayload, LonisCapabilities};
 
 use serde::{Deserialize, Serialize};
 
