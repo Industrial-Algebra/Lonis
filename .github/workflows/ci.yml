@@ -56,7 +56,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Build docs (warnings denied)
+      - name: Build docs (warnings denied, library targets)
         env:
           RUSTDOCFLAGS: -D warnings
-        run: cargo doc --all-features --no-deps
+        # --lib: the `lonis` facade lib and the `lonis` binary (lonis-cli)
+        # share a doc output path (cargo #6313); documenting both races the
+        # concurrent rustdoc jobs on the shared directory. Libraries only.
+        run: cargo doc --workspace --lib --all-features --no-deps
