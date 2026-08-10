@@ -1,6 +1,12 @@
 [workspace]
 resolver = "2"
-members = ["crates/lonis-schema", "crates/lonis-derive", "crates/lonis-core", "crates/lonis-cli"]
+members = [
+    "crates/lonis-schema",
+    "crates/lonis-derive",
+    "crates/lonis-core",
+    "crates/lonis-cli",
+    "crates/lonis",
+]
 
 [workspace.package]
 version = "0.0.1"
