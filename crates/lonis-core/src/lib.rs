@@ -17,6 +17,10 @@
 
 #![forbid(unsafe_code)]
 
+pub mod subprocess;
+
+pub use subprocess::{Availability, StdoutMapping, SubprocessTool};
+
 use std::collections::BTreeMap;
 use std::io::Write;
 
