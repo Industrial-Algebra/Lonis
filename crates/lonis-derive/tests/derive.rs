@@ -26,7 +26,7 @@ fn derived_output_formats_default_to_all_three() {
 
 #[test]
 fn derived_schema_version_is_one() {
-    assert_eq!(SearchTool.schema_version(), SchemaVersion::new(1));
+    assert_eq!(SearchTool.schema_version(), SchemaVersion::default());
 }
 
 #[test]

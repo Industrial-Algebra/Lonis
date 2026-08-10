@@ -16,6 +16,7 @@ description = "Lonis — an AI-native tool harness for the Anima ecosystem"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+sha2 = "0.10"
 clap = { version = "4", features = ["derive"] }
 lonis-schema = { version = "0.0.1", path = "crates/lonis-schema" }
 lonis-core = { version = "0.0.1", path = "crates/lonis-core" }
