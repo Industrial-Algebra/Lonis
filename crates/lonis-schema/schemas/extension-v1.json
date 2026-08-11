@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://industrialalgebra.com/schemas/lonis.block/extension/v1",
+  "x-lonis-protocol-version": "lonis.block/v1",
+  "title": "lonis.block extension payload (the erased seam, ADR-0002)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "data"],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "maxLength": 256,
+      "not": {
+        "enum": [
+          "message",
+          "question",
+          "answer",
+          "decision",
+          "action",
+          "assumption",
+          "summary",
+          "evidence",
+          "definition",
+          "capability",
+          "intent",
+          "plan",
+          "result",
+          "outcome"
+        ]
+      }
+    },
+    "data": true
+  }
+}

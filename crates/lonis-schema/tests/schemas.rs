@@ -28,9 +28,9 @@ fn golden(kind: &str) -> serde_json::Value {
 }
 
 #[test]
-fn catalog_covers_envelope_plus_fourteen_kinds() {
+fn catalog_covers_envelope_plus_fourteen_kinds_and_the_extension_seam() {
     let catalog = block_schema_catalog().unwrap();
-    assert_eq!(catalog.schemas.len(), 15);
+    assert_eq!(catalog.schemas.len(), 16);
     assert_eq!(catalog.schemas[0].kind, BlockSchemaKind::Block);
     // Deterministic order, all kinds present.
     let names: Vec<_> = catalog.schemas.iter().map(|s| s.kind.as_str()).collect();
@@ -50,6 +50,7 @@ fn catalog_covers_envelope_plus_fourteen_kinds() {
         "plan",
         "result",
         "outcome",
+        "extension",
     ] {
         assert!(names.contains(&kind), "catalog missing `{kind}`");
     }
@@ -100,7 +101,15 @@ fn golden_instances_parse_as_seed_blocks() {
         }
         let wire = golden(kind.as_str());
         let block: SeedBlock = serde_json::from_value(wire.clone()).unwrap();
-        assert_eq!(block.payload().kind_name(), kind.as_str());
+        if kind == BlockSchemaKind::Extension {
+            // The extension golden carries a vertical kind tag.
+            assert_eq!(
+                block.payload().category(),
+                lonis_schema::BlockCategory::Extension
+            );
+        } else {
+            assert_eq!(block.payload().kind_name(), kind.as_str());
+        }
         // Semantic re-serialization identity (the wire pin).
         assert_eq!(serde_json::to_value(&block).unwrap(), wire);
     }
@@ -143,7 +152,7 @@ fn golden_content_hashes_are_pinned() {
     let pins_path = golden_dir().join("hashes.json");
     let text = std::fs::read_to_string(&pins_path).expect("missing golden hashes.json");
     let recorded: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&text).unwrap();
-    assert_eq!(recorded.len(), 14);
+    assert_eq!(recorded.len(), 15);
     for kind in BlockSchemaKind::ALL {
         if kind == BlockSchemaKind::Block {
             continue;
@@ -180,4 +189,54 @@ fn kind_schema_rejects_wrong_kind_const() {
     // question's data under message's kind const: the const alone must fail…
     // (data shape aside, the tag must match the schema's kind)
     assert!(validator.validate(&payload).is_err());
+}
+
+// -- Issue #10: the envelope admits Extension payloads (the erased seam) --
+
+#[test]
+fn envelope_schema_admits_extension_payloads() {
+    // The issue's repro: a vertical block is a valid SeedBlock on the wire
+    // and must validate against the envelope schema.
+    let wire = serde_json::json!({
+        "schema_version": "lonis.block/v1",
+        "attribution": {
+            "identity": "karpal:discovery:search",
+            "provenance": { "when": "2026-08-10T23:00:00Z", "producer": "karpal-discovery" }
+        },
+        "payload": { "kind": "karpal.search", "data": { "query": "Functor", "results": [] } }
+    });
+    let block: SeedBlock = serde_json::from_value(wire.clone()).unwrap();
+    assert_eq!(block.payload().kind_name(), "karpal.search");
+    let envelope = block_schema(BlockSchemaKind::Block).unwrap();
+    let validator = jsonschema::validator_for(&envelope.document).unwrap();
+    validator.validate(&wire).unwrap();
+}
+
+#[test]
+fn envelope_schema_rejects_seed_shadowing_with_bad_data() {
+    // A payload tagged as a seed kind but carrying invalid seed data must
+    // not escape through the extension branch (the branches are disjoint).
+    let mut wire = golden("message");
+    let payload = wire["payload"].as_object_mut().unwrap();
+    payload["data"] = serde_json::json!({"not_content": 1});
+    let envelope = block_schema(BlockSchemaKind::Block).unwrap();
+    let validator = jsonschema::validator_for(&envelope.document).unwrap();
+    assert!(validator.validate(&wire).is_err());
+}
+
+#[test]
+fn extension_golden_validates_and_hashes() {
+    let wire = golden("extension");
+    let block: SeedBlock = serde_json::from_value(wire.clone()).unwrap();
+    let envelope = block_schema(BlockSchemaKind::Block).unwrap();
+    jsonschema::validator_for(&envelope.document)
+        .unwrap()
+        .validate(&wire)
+        .unwrap();
+    let schema = block_schema(BlockSchemaKind::Extension).unwrap();
+    jsonschema::validator_for(&schema.document)
+        .unwrap()
+        .validate(&wire["payload"])
+        .unwrap();
+    let _ = block.content_hash();
 }

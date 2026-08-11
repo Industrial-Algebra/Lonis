@@ -1,7 +1,8 @@
 import json, collections
 
 KINDS = ["message", "question", "answer", "decision", "action", "assumption", "summary",
-         "evidence", "definition", "capability", "intent", "plan", "result", "outcome"]
+         "evidence", "definition", "capability", "intent", "plan", "result", "outcome",
+         "extension"]
 
 defs = {}
 for k in KINDS:

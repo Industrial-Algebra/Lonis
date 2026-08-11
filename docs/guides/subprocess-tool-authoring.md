@@ -67,8 +67,11 @@ Optional: `provenance` (replay: `input_hash`, `seed`, …), `warnings`,
 
 The normative, machine-checkable form is the curated JSON Schema:
 `lonis schema block` (envelope) or `lonis schema <kind>` (per kind) emits
-the draft 2020-12 document; `lonis schema` lists all 15 families. Validate
-your output against them before shipping a tool.
+the draft 2020-12 document; `lonis schema` lists all 16 families. Validate
+your output against them before shipping a tool — the envelope's `payload`
+`oneOf` includes an `extension` branch, so vertical kinds (like the
+`mytool.thing` example above) validate: the envelope checks structure, and
+your own kind schema checks your `data` shape.
 
 ### 4. Targets arrive via stdin input or argv — never env or cwd
 

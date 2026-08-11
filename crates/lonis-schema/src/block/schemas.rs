@@ -29,6 +29,7 @@ const INTENT_V1: &str = include_str!("../../schemas/intent-v1.json");
 const PLAN_V1: &str = include_str!("../../schemas/plan-v1.json");
 const RESULT_V1: &str = include_str!("../../schemas/result-v1.json");
 const OUTCOME_V1: &str = include_str!("../../schemas/outcome-v1.json");
+const EXTENSION_V1: &str = include_str!("../../schemas/extension-v1.json");
 
 /// Errors from schema loading — embedded curated schemas should never be
 /// malformed, so any failure here is a build/packaging defect.
@@ -70,11 +71,15 @@ pub enum BlockSchemaKind {
     Result,
     /// `outcome` payload.
     Outcome,
+    /// A domain-registered payload outside the seed corpus (the erased
+    /// seam: any kind tag not in the 14, any data).
+    Extension,
 }
 
 impl BlockSchemaKind {
-    /// Every schema family in deterministic order (envelope first).
-    pub const ALL: [Self; 15] = [
+    /// Every schema family in deterministic order (envelope first,
+    /// extension seam last).
+    pub const ALL: [Self; 16] = [
         Self::Block,
         Self::Message,
         Self::Question,
@@ -90,6 +95,7 @@ impl BlockSchemaKind {
         Self::Plan,
         Self::Result,
         Self::Outcome,
+        Self::Extension,
     ];
 
     /// The stable lowercase family name.
@@ -110,6 +116,7 @@ impl BlockSchemaKind {
             Self::Plan => "plan",
             Self::Result => "result",
             Self::Outcome => "outcome",
+            Self::Extension => "extension",
         }
     }
 
@@ -130,6 +137,7 @@ impl BlockSchemaKind {
             Self::Plan => PLAN_V1,
             Self::Result => RESULT_V1,
             Self::Outcome => OUTCOME_V1,
+            Self::Extension => EXTENSION_V1,
         }
     }
 }
