@@ -5,6 +5,7 @@
 //! error) through the real `lonis` binary.
 
 use assert_cmd::Command;
+use lonis_core::Tool as _;
 use lonis_schema::SeedBlock;
 
 #[test]
@@ -121,6 +122,49 @@ fn schema_unknown_kind_exits_three() {
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(3));
+}
+
+#[test]
+fn manifest_emits_provider_metadata() {
+    let output = Command::cargo_bin("lonis")
+        .unwrap()
+        .args(["--mode", "json", "manifest"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let manifest: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(manifest["name"], "lonis");
+    assert_eq!(manifest["provider_type"], "external-executable");
+    let tools = manifest["tools"].as_array().unwrap();
+    assert!(tools.contains(&serde_json::json!("lonis:builtin:echo")));
+}
+
+#[test]
+fn tools_list_json_mode_emits_machine_readable_summaries() {
+    let output = Command::cargo_bin("lonis")
+        .unwrap()
+        .args(["--mode", "json", "tools", "list"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let list: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let tools = list["tools"].as_array().unwrap();
+    assert!(tools.iter().any(|t| t["name"] == "lonis:builtin:echo"));
+}
+
+#[test]
+fn lonis_hosts_lonis_through_subprocess_provider() {
+    // The self-host dogfood (ADR-0006): discover and invoke lonis's own
+    // builtins through SubprocessProvider, treating `lonis` as a foreign
+    // provider executable.
+    let lonis = assert_cmd::cargo::cargo_bin("lonis");
+    let provider = lonis_core::SubprocessProvider::new(&lonis);
+    let manifest = provider.manifest().unwrap();
+    assert_eq!(manifest.name, "lonis");
+    let tool = provider.tool("lonis:builtin:echo");
+    let blocks = tool.invoke(serde_json::json!({"dog": "food"})).unwrap();
+    let wire = serde_json::to_value(&blocks[0]).unwrap();
+    assert_eq!(wire["payload"]["data"]["output"]["dog"], "food");
 }
 
 #[test]

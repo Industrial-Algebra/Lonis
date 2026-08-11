@@ -49,6 +49,8 @@ impl From<ModeArg> for OutputMode {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Emit the provider manifest (ADR-0006: lonis is a conforming provider).
+    Manifest,
     /// Inspect registered tools.
     Tools {
         #[command(subcommand)]
@@ -85,13 +87,46 @@ fn main() -> ExitCode {
     let mode: OutputMode = cli.mode.into();
     let registry = builtins::registry();
     match cli.command {
+        Command::Manifest => {
+            let tools: Vec<String> = registry.iter().map(|(id, _)| id.to_owned()).collect();
+            let manifest = serde_json::json!({
+                "name": "lonis",
+                "version": env!("CARGO_PKG_VERSION"),
+                "description": "Lonis — an AI-native tool harness for the Anima ecosystem",
+                "provider_type": "external-executable",
+                "protocol_version": "lonis.provider/v1",
+                "tools": tools,
+                "capabilities": ["diagnostics"]
+            });
+            println!("{manifest}");
+            ExitCode::SUCCESS
+        }
         Command::Tools { action } => match action {
-            ToolsAction::List => {
-                for (id, tool) in registry.iter() {
-                    println!("{id}\t{}", tool.tool_version());
+            ToolsAction::List => match mode {
+                OutputMode::Human => {
+                    for (id, tool) in registry.iter() {
+                        println!("{id}\t{}", tool.tool_version());
+                    }
+                    ExitCode::SUCCESS
                 }
-                ExitCode::SUCCESS
-            }
+                OutputMode::Json | OutputMode::Ndjson => {
+                    let tools: Vec<serde_json::Value> = registry
+                        .iter()
+                        .map(|(id, tool)| {
+                            serde_json::json!({
+                                "name": id,
+                                "version": tool.tool_version(),
+                                "description": tool.contract().map(|c| c.description),
+                            })
+                        })
+                        .collect();
+                    println!(
+                        "{}",
+                        serde_json::json!({"provider": "lonis", "tools": tools})
+                    );
+                    ExitCode::SUCCESS
+                }
+            },
             ToolsAction::Describe { id } => match registry.get(&id) {
                 Some(tool) => match tool.contract() {
                     Some(contract) => match serde_json::to_string_pretty(&contract) {

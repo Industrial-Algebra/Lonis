@@ -11,4 +11,5 @@ repository.workspace = true
 
 [dependencies]
 lonis-schema = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
