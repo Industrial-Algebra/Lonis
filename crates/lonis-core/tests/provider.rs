@@ -3,19 +3,17 @@
 
 //! Integration tests for `SubprocessProvider`: discovering and invoking
 //! tools hosted by one external executable (ADR-0006), through a real
-//! process boundary against `examples/mock_tool.rs`'s provider subcommands.
+//! process boundary against the `mock_tool` bin's provider subcommands.
 
 use std::path::PathBuf;
 
 use lonis_core::{SubprocessProvider, Tool};
 use lonis_schema::Capabilities;
 
+/// The mock binary: a `[[bin]]` target, so Cargo resolves it robustly in
+/// both workspace and scoped (`-p lonis-core`) test runs.
 fn mock_tool() -> PathBuf {
-    let mut path = std::env::current_exe().unwrap();
-    path.pop(); // deps/
-    path.pop(); // <profile>/
-    path.push("examples/mock_tool");
-    path
+    PathBuf::from(env!("CARGO_BIN_EXE_mock_tool"))
 }
 
 fn provider() -> SubprocessProvider {

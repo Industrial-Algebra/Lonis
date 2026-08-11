@@ -2,21 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Integration tests for `SubprocessTool`: real process-spawn boundary,
-//! exercising the ADR-0003 wire protocol against `examples/mock_tool.rs`.
+//! exercising the ADR-0003 wire protocol against the `mock_tool` bin.
 
 use std::path::PathBuf;
 
 use lonis_core::{StdoutMapping, SubprocessTool, Tool};
 use lonis_schema::{exit_code, SeedBlock, ToolId};
 
-/// Locate the mock binary: `cargo test` builds examples; the test binary
-/// lives in `target/<profile>/deps/`, the example in `target/<profile>/examples/`.
+/// The mock binary: a `[[bin]]` target, so Cargo resolves it robustly in
+/// both workspace and scoped (`-p lonis-core`) test runs.
 fn mock_tool() -> PathBuf {
-    let mut path = std::env::current_exe().unwrap();
-    path.pop(); // deps/
-    path.pop(); // <profile>/
-    path.push("examples/mock_tool");
-    path
+    PathBuf::from(env!("CARGO_BIN_EXE_mock_tool"))
 }
 
 fn mock(args: &[&str]) -> SubprocessTool {

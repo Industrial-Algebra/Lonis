@@ -113,7 +113,7 @@ lonis-free (validated by karpal-discovery: 19 default tests, no lonis fetch).
 
 ## Reference implementation
 
-`crates/lonis-core/examples/mock_tool.rs` is a minimal Rust tool speaking
+`crates/lonis-core/src/bin/mock_tool.rs` is a minimal Rust tool speaking
 this protocol (all modes: blocks, ndjson, text, structured failure, bounded
 output). Copy it.
 
