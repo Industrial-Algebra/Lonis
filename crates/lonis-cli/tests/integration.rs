@@ -83,6 +83,47 @@ fn call_echo_accepts_at_file_input() {
 }
 
 #[test]
+fn schema_list_shows_all_families() {
+    let output = Command::cargo_bin("lonis")
+        .unwrap()
+        .args(["schema"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("block"));
+    assert!(stdout.contains("message"));
+    assert!(stdout.contains("outcome"));
+    assert!(stdout.contains("lonis.block/message/v1"));
+}
+
+#[test]
+fn schema_kind_emits_the_document() {
+    let output = Command::cargo_bin("lonis")
+        .unwrap()
+        .args(["schema", "message"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let doc: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        doc["$id"],
+        "https://industrialalgebra.com/schemas/lonis.block/message/v1"
+    );
+    assert_eq!(doc["properties"]["kind"]["const"], "message");
+}
+
+#[test]
+fn schema_unknown_kind_exits_three() {
+    let output = Command::cargo_bin("lonis")
+        .unwrap()
+        .args(["schema", "bogus"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(3));
+}
+
+#[test]
 fn unknown_tool_exits_three_with_structured_stderr() {
     let output = Command::cargo_bin("lonis")
         .unwrap()

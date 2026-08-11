@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://industrialalgebra.com/schemas/lonis.block/assumption/v1",
+  "x-lonis-protocol-version": "lonis.block/v1",
+  "title": "lonis.block assumption payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "data"],
+  "properties": {
+    "kind": { "const": "assumption" },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["statement", "status"],
+      "properties": {
+        "statement": { "type": "string", "maxLength": 4096 },
+        "status": { "enum": ["open", "validated", "refuted"] }
+      }
+    }
+  }
+}

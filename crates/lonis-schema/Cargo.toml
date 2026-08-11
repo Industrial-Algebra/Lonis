@@ -22,3 +22,6 @@ lonis-derive = { workspace = true, optional = true }
 [features]
 default = []
 derive = ["dep:lonis-derive"]
+
+[dev-dependencies]
+jsonschema = "0.33.0"

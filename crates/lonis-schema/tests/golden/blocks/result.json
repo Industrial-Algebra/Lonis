@@ -1,0 +1,35 @@
+{
+  "schema_version": "lonis.block/v1",
+  "attribution": {
+    "identity": "lonis:test:golden",
+    "provenance": {
+      "when": "2026-08-10T00:00:00Z",
+      "producer": "lonis:test:golden"
+    }
+  },
+  "payload": {
+    "kind": "result",
+    "data": {
+      "output": {
+        "nim_sum": 1
+      },
+      "score": 0.95,
+      "evidence": [
+        {
+          "kind": "probe",
+          "summary": "nim-sum probe"
+        }
+      ],
+      "validated_assumptions": [
+        "catalog current"
+      ],
+      "resources": {
+        "operations": 118,
+        "nodes": 8,
+        "iterations": 11,
+        "bytes": 54
+      },
+      "duration_micros": 87205
+    }
+  }
+}

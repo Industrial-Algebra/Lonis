@@ -1,0 +1,22 @@
+{
+  "schema_version": "lonis.block/v1",
+  "attribution": {
+    "identity": "lonis:test:golden",
+    "provenance": {
+      "when": "2026-08-10T00:00:00Z",
+      "producer": "lonis:test:golden"
+    }
+  },
+  "payload": {
+    "kind": "capability",
+    "data": {
+      "name": "lonis:builtin:echo",
+      "description": "echo input",
+      "input_schema": "lonis.echo/input/v1",
+      "output_schema": "lonis.echo/output/v1",
+      "determinism": "deterministic",
+      "side_effects": "none",
+      "cost": "low"
+    }
+  }
+}
