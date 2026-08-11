@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://industrialalgebra.com/schemas/lonis.block/action/v1",
+  "x-lonis-protocol-version": "lonis.block/v1",
+  "title": "lonis.block action payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "data"],
+  "properties": {
+    "kind": { "const": "action" },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verb", "status"],
+      "properties": {
+        "verb": { "type": "string", "maxLength": 256 },
+        "target": { "type": "string", "maxLength": 4096 },
+        "parameters": true,
+        "status": { "enum": ["pending", "running", "completed", "failed"] }
+      }
+    }
+  }
+}

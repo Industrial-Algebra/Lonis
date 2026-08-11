@@ -65,6 +65,11 @@ Every block requires `schema_version`, `attribution` (with
 Optional: `provenance` (replay: `input_hash`, `seed`, …), `warnings`,
 `bounds`. Unknown top-level fields are **rejected** (`deny_unknown_fields`).
 
+The normative, machine-checkable form is the curated JSON Schema:
+`lonis schema block` (envelope) or `lonis schema <kind>` (per kind) emits
+the draft 2020-12 document; `lonis schema` lists all 15 families. Validate
+your output against them before shipping a tool.
+
 ### 4. Targets arrive via stdin input or argv — never env or cwd
 
 `SubprocessTool` deliberately isolates: the environment is cleared (only

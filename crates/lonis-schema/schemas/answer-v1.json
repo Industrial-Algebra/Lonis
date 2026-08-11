@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://industrialalgebra.com/schemas/lonis.block/answer/v1",
+  "x-lonis-protocol-version": "lonis.block/v1",
+  "title": "lonis.block answer payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "data"],
+  "properties": {
+    "kind": { "const": "answer" },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text"],
+      "properties": {
+        "question": { "type": "string", "maxLength": 4096 },
+        "text": { "type": "string", "maxLength": 16384 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    }
+  }
+}

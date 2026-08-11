@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://industrialalgebra.com/schemas/lonis.block/capability/v1",
+  "x-lonis-protocol-version": "lonis.block/v1",
+  "title": "lonis.block capability payload (ToolContract)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "data"],
+  "properties": {
+    "kind": { "const": "capability" },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "description",
+        "input_schema",
+        "output_schema",
+        "determinism",
+        "side_effects",
+        "cost"
+      ],
+      "properties": {
+        "name": { "type": "string", "maxLength": 1024 },
+        "description": { "type": "string", "maxLength": 4096 },
+        "input_schema": { "type": "string", "maxLength": 1024 },
+        "output_schema": { "type": "string", "maxLength": 1024 },
+        "determinism": {
+          "enum": ["deterministic", "bounded-nondeterministic", "nondeterministic"]
+        },
+        "side_effects": {
+          "enum": [
+            "none",
+            "read-only",
+            "writes-filesystem",
+            "mutates-external",
+            "network",
+            "destructive"
+          ]
+        },
+        "cost": { "enum": ["low", "medium", "high"] },
+        "capabilities": {
+          "type": "array",
+          "maxItems": 64,
+          "items": { "type": "string", "maxLength": 256 }
+        }
+      }
+    }
+  }
+}

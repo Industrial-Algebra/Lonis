@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://industrialalgebra.com/schemas/lonis.block/result/v1",
+  "x-lonis-protocol-version": "lonis.block/v1",
+  "title": "lonis.block result payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "data"],
+  "properties": {
+    "kind": { "const": "result" },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["output"],
+      "properties": {
+        "output": true,
+        "score": { "type": "number" },
+        "evidence": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": { "$ref": "#/$defs/evidence_data" }
+        },
+        "validated_assumptions": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": { "type": "string", "maxLength": 1024 }
+        },
+        "refuted_assumptions": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": { "type": "string", "maxLength": 1024 }
+        },
+        "resources": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["operations", "nodes", "iterations", "bytes"],
+          "properties": {
+            "operations": { "type": "integer", "minimum": 0 },
+            "nodes": { "type": "integer", "minimum": 0 },
+            "iterations": { "type": "integer", "minimum": 0 },
+            "bytes": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "duration_micros": { "type": "integer", "minimum": 0 }
+      }
+    }
+  },
+  "$defs": {
+    "evidence_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "summary"],
+      "properties": {
+        "kind": { "type": "string", "maxLength": 256 },
+        "summary": { "type": "string", "maxLength": 4096 },
+        "source": { "type": "string", "maxLength": 4096 },
+        "hash": { "type": "string", "maxLength": 128 },
+        "weight": { "type": "number" }
+      }
+    }
+  }
+}

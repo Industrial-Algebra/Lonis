@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://industrialalgebra.com/schemas/lonis.block/definition/v1",
+  "x-lonis-protocol-version": "lonis.block/v1",
+  "title": "lonis.block definition payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "data"],
+  "properties": {
+    "kind": { "const": "definition" },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "kind"],
+      "properties": {
+        "id": { "type": "string", "maxLength": 1024 },
+        "name": { "type": "string", "maxLength": 512 },
+        "kind": { "type": "string", "maxLength": 128 },
+        "path": { "type": "string", "maxLength": 4096 },
+        "signature": { "type": "string", "maxLength": 4096 },
+        "summary": { "type": "string", "maxLength": 4096 },
+        "docs": { "type": "string", "maxLength": 65536 },
+        "overlay": true
+      }
+    }
+  }
+}

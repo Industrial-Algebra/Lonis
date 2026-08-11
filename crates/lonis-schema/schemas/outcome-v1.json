@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://industrialalgebra.com/schemas/lonis.block/outcome/v1",
+  "x-lonis-protocol-version": "lonis.block/v1",
+  "title": "lonis.block outcome payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "data"],
+  "properties": {
+    "kind": { "const": "outcome" },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "kind", "message"],
+      "properties": {
+        "status": {
+          "enum": [
+            "success",
+            "partial",
+            "no_match",
+            "insufficient_evidence",
+            "blocked",
+            "error"
+          ]
+        },
+        "kind": { "type": "string", "maxLength": 256 },
+        "message": { "type": "string", "maxLength": 4096 },
+        "details": true,
+        "exit_code": { "type": "integer", "minimum": 0, "maximum": 255 }
+      }
+    }
+  }
+}

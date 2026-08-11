@@ -54,6 +54,11 @@ enum Command {
         #[command(subcommand)]
         action: ToolsAction,
     },
+    /// Emit a versioned block-contract JSON Schema (`lonis schema` lists all).
+    Schema {
+        /// Schema family: `block` (the envelope) or one of the 14 seed kinds.
+        kind: Option<String>,
+    },
     /// Invoke a tool by id. INPUT is a JSON value, or `@<path>` to read JSON
     /// from a file; if omitted, JSON is read from stdin.
     Call {
@@ -106,6 +111,41 @@ fn main() -> ExitCode {
                 },
                 None => {
                     eprintln!("not_found: no tool with id `{id}`");
+                    ExitCode::from(exit_code::NOT_FOUND)
+                }
+            },
+        },
+        Command::Schema { kind } => match kind {
+            None => match lonis_schema::block::schemas::block_schema_catalog() {
+                Ok(catalog) => {
+                    for summary in &catalog.schemas {
+                        println!("{}\t{}", summary.kind.as_str(), summary.id);
+                    }
+                    ExitCode::SUCCESS
+                }
+                Err(err) => {
+                    eprintln!("generic: {err}");
+                    ExitCode::from(exit_code::GENERIC)
+                }
+            },
+            Some(kind) => match kind.parse() {
+                Ok(kind) => {
+                    match lonis_schema::block::schemas::block_schema(kind).and_then(|s| {
+                        s.canonical_json()
+                            .map_err(|e| lonis_schema::block::schemas::SchemaError(e.to_string()))
+                    }) {
+                        Ok(bytes) => {
+                            print!("{}", String::from_utf8_lossy(&bytes));
+                            ExitCode::SUCCESS
+                        }
+                        Err(err) => {
+                            eprintln!("generic: {err}");
+                            ExitCode::from(exit_code::GENERIC)
+                        }
+                    }
+                }
+                Err(_) => {
+                    eprintln!("not_found: no block schema kind `{kind}`");
                     ExitCode::from(exit_code::NOT_FOUND)
                 }
             },

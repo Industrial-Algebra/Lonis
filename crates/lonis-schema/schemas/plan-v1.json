@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://industrialalgebra.com/schemas/lonis.block/plan/v1",
+  "x-lonis-protocol-version": "lonis.block/v1",
+  "title": "lonis.block plan payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "data"],
+  "properties": {
+    "kind": { "const": "plan" },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["steps"],
+      "properties": {
+        "goal": { "type": "string", "maxLength": 4096 },
+        "steps": {
+          "type": "array",
+          "maxItems": 4096,
+          "items": { "$ref": "#/$defs/plan_step" }
+        },
+        "prerequisite_order": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": { "type": "string", "maxLength": 1024 }
+        },
+        "normalization": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["normalized", "max_rewrites"],
+          "properties": {
+            "normalized": { "type": "boolean" },
+            "max_rewrites": { "type": "integer", "minimum": 1, "maximum": 4096 },
+            "trace": {
+              "type": "array",
+              "maxItems": 4096,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["before", "after"],
+                "properties": {
+                  "before": {
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/plan_step" }
+                  },
+                  "after": {
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/plan_step" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "plan_hash": { "type": "string", "maxLength": 128 }
+      }
+    }
+  },
+  "$defs": {
+    "plan_step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "detail"],
+      "properties": {
+        "kind": { "type": "string", "maxLength": 256 },
+        "detail": true
+      }
+    }
+  }
+}

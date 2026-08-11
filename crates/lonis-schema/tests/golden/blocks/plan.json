@@ -1,0 +1,53 @@
+{
+  "schema_version": "lonis.block/v1",
+  "attribution": {
+    "identity": "lonis:test:golden",
+    "provenance": {
+      "when": "2026-08-10T00:00:00Z",
+      "producer": "lonis:test:golden"
+    }
+  },
+  "payload": {
+    "kind": "plan",
+    "data": {
+      "goal": "integrate holographic recall",
+      "steps": [
+        {
+          "kind": "dependency",
+          "detail": {
+            "package": "amari-holographic",
+            "version": "0.24.1"
+          }
+        }
+      ],
+      "prerequisite_order": [
+        "amari:amari-holographic:memory:retrieval"
+      ],
+      "normalization": {
+        "normalized": true,
+        "max_rewrites": 4096,
+        "trace": [
+          {
+            "before": [
+              {
+                "kind": "dependency",
+                "detail": {
+                  "package": "a"
+                }
+              }
+            ],
+            "after": [
+              {
+                "kind": "dependency",
+                "detail": {
+                  "package": "a"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "plan_hash": "cafe"
+    }
+  }
+}
