@@ -250,6 +250,26 @@ impl SubprocessTool {
             exit_code::TOOL_FAILED,
         )
     }
+
+    /// Clone this tool's configuration under a new id and argv prefix (used
+    /// by `SubprocessProvider` to construct hosted tools sharing the
+    /// provider's bounds).
+    #[must_use]
+    pub(crate) fn clone_for(&self, id: ToolId, args: Vec<String>) -> Self {
+        Self {
+            id,
+            command: self.command.clone(),
+            args,
+            description: self.description.clone(),
+            version: self.version.clone(),
+            mapping: self.mapping,
+            timeout: self.timeout,
+            max_stdout_bytes: self.max_stdout_bytes,
+            max_stderr_bytes: self.max_stderr_bytes,
+            cwd: self.cwd.clone(),
+            env: self.env.clone(),
+        }
+    }
 }
 
 #[cfg(unix)]
@@ -359,7 +379,7 @@ fn text_block(tool: &SubprocessTool, stdout: &str, input_hash: String) -> SeedBl
 
 /// Map a nonzero exit: structured [`ToolError`] on stderr wins; otherwise a
 /// generic `tool_failed` carrying the trimmed stderr and the child's code.
-fn map_failure(status: &ExitStatus, stderr: &[u8]) -> ToolError {
+pub(crate) fn map_failure(status: &ExitStatus, stderr: &[u8]) -> ToolError {
     let text = String::from_utf8_lossy(stderr).trim().to_owned();
     if let Ok(err) = serde_json::from_str::<ToolError>(&text) {
         return err;
@@ -385,8 +405,22 @@ fn kill_and_reap(child: &mut Child) {
     let _ = child.wait();
 }
 
-impl Tool<BlockKind> for SubprocessTool {
-    fn invoke(&self, input: serde_json::Value) -> Result<Vec<SeedBlock>, ToolError> {
+/// The captured result of a bounded child execution.
+pub(crate) struct ExecOutcome {
+    pub status: ExitStatus,
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
+}
+
+impl SubprocessTool {
+    /// Bounded execution core shared with `SubprocessProvider` (ADR-0006):
+    /// spawn with isolation, optional stdin input, drained+capped streams,
+    /// hard timeout — returning the raw outcome for the caller to map.
+    pub(crate) fn exec_bounded(
+        &self,
+        extra_args: &[String],
+        input: Option<&serde_json::Value>,
+    ) -> Result<ExecOutcome, ToolError> {
         let availability = self.availability();
         if !availability.is_ready() {
             return Err(self.unavailable_error(&availability));
@@ -394,7 +428,7 @@ impl Tool<BlockKind> for SubprocessTool {
 
         let mut command = Command::new(&self.command);
         command
-            .args(&self.args)
+            .args(self.args.iter().chain(extra_args))
             .env_clear()
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -414,9 +448,11 @@ impl Tool<BlockKind> for SubprocessTool {
             )
         })?;
 
-        // Feed input, then close stdin so the child sees EOF.
+        // Feed input (if any), then always close stdin so the child sees EOF.
         if let Some(mut stdin) = child.stdin.take() {
-            let _ = stdin.write_all(input.to_string().as_bytes());
+            if let Some(input) = input {
+                let _ = stdin.write_all(input.to_string().as_bytes());
+            }
         }
 
         let stdout_exceeded = Arc::new(AtomicBool::new(false));
@@ -474,12 +510,23 @@ impl Tool<BlockKind> for SubprocessTool {
 
         let stdout = stdout_drain.join().unwrap_or_default();
         let stderr = stderr_drain.join().unwrap_or_default();
+        Ok(ExecOutcome {
+            status,
+            stdout,
+            stderr,
+        })
+    }
+}
 
-        if !status.success() {
-            return Err(map_failure(&status, &stderr));
+impl Tool<BlockKind> for SubprocessTool {
+    fn invoke(&self, input: serde_json::Value) -> Result<Vec<SeedBlock>, ToolError> {
+        let outcome = self.exec_bounded(&[], Some(&input))?;
+
+        if !outcome.status.success() {
+            return Err(map_failure(&outcome.status, &outcome.stderr));
         }
 
-        let stdout_text = String::from_utf8_lossy(&stdout).into_owned();
+        let stdout_text = String::from_utf8_lossy(&outcome.stdout).into_owned();
         match self.mapping {
             StdoutMapping::Blocks => parse_blocks(&stdout_text),
             StdoutMapping::Text => Ok(vec![text_block(

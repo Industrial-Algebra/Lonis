@@ -17,7 +17,10 @@
 
 #![forbid(unsafe_code)]
 
+pub mod provider;
 pub mod subprocess;
+
+pub use provider::{ProviderManifest, ProviderToolList, ProviderToolSummary, SubprocessProvider};
 
 pub use subprocess::{Availability, StdoutMapping, SubprocessTool};
 

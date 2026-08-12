@@ -704,6 +704,7 @@ name = "lonis-core"
 version = "0.0.1"
 dependencies = [
  "lonis-schema",
+ "serde",
  "serde_json",
 ]
 

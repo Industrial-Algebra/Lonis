@@ -113,6 +113,24 @@ lonis-free (validated by karpal-discovery: 19 default tests, no lonis fetch).
 
 ## Reference implementation
 
-`crates/lonis-core/examples/mock_tool.rs` is a minimal Rust tool speaking
+`crates/lonis-core/src/bin/mock_tool.rs` is a minimal Rust tool speaking
 this protocol (all modes: blocks, ndjson, text, structured failure, bounded
 output). Copy it.
+
+## Hosting many tools: the provider surface (ADR-0006)
+
+One executable can host a whole tool surface behind four subcommands — this
+is how verticals should ship multiple operations:
+
+```bash
+mytool --mode json manifest        # {"name", "version", "tools": [...], ...}
+mytool --mode json tools list      # {"provider", "tools": [{"name", "description"}]}
+mytool --mode json tools describe <name>   # a ToolContract JSON
+mytool --mode json call <name>     # ADR-0003 invocation (stdin JSON → blocks)
+```
+
+`SubprocessProvider` discovers that surface and constructs a
+`SubprocessTool` per operation; dotted tool names (`mock.echo`) are mangled
+to namespaced ids (`mock:echo`). `lonis` itself is a conforming provider —
+run `lonis manifest` and `lonis --mode json tools list` to see the shapes.
+Manifests may add fields over time; hosts must tolerate unknown fields.
