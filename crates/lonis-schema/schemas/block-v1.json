@@ -1,167 +1,821 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://industrialalgebra.com/schemas/lonis.block/v1",
-  "x-lonis-protocol-version": "lonis.block/v1",
-  "title": "lonis.block envelope (all 14 seed kinds)",
-  "type": "object",
-  "additionalProperties": false,
-  "required": [
-    "schema_version",
-    "attribution",
-    "payload"
-  ],
-  "properties": {
-    "schema_version": {
-      "const": "lonis.block/v1"
-    },
-    "provenance": {
-      "type": "object",
+  "$defs": {
+    "action": {
       "additionalProperties": false,
       "properties": {
-        "tool_version": {
-          "type": "string",
-          "maxLength": 256
-        },
-        "compatibility": {
-          "type": "object",
+        "data": {
           "additionalProperties": false,
+          "properties": {
+            "parameters": true,
+            "status": {
+              "enum": [
+                "pending",
+                "running",
+                "completed",
+                "failed"
+              ]
+            },
+            "target": {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "verb": {
+              "maxLength": 256,
+              "type": "string"
+            }
+          },
           "required": [
+            "verb",
             "status"
           ],
-          "properties": {
-            "status": {
-              "type": "string",
-              "maxLength": 256
-            },
-            "reasons": {
-              "type": "array",
-              "maxItems": 256,
-              "items": {
-                "type": "string",
-                "maxLength": 4096
-              }
-            }
-          }
+          "type": "object"
         },
-        "replay": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "replayable"
-          ],
-          "properties": {
-            "replayable": {
-              "type": "boolean"
-            },
-            "required_hashes": {
-              "type": "array",
-              "maxItems": 64,
-              "items": {
-                "type": "string",
-                "maxLength": 256
-              }
-            },
-            "reasons": {
-              "type": "array",
-              "maxItems": 256,
-              "items": {
-                "type": "string",
-                "maxLength": 4096
-              }
-            }
-          }
-        },
-        "project_hash": {
-          "type": "string",
-          "maxLength": 128
-        },
-        "input_hash": {
-          "type": "string",
-          "maxLength": 128
-        },
-        "plan_hash": {
-          "type": "string",
-          "maxLength": 128
-        },
-        "result_hash": {
-          "type": "string",
-          "maxLength": 128
-        },
-        "seed": {
-          "type": "integer",
-          "minimum": 0
+        "kind": {
+          "const": "action"
         }
-      }
-    },
-    "warnings": {
-      "type": "array",
-      "maxItems": 256,
-      "items": {
-        "type": "string",
-        "maxLength": 4096
-      }
-    },
-    "attribution": {
-      "type": "object",
-      "additionalProperties": false,
+      },
       "required": [
-        "identity",
-        "provenance"
+        "kind",
+        "data"
       ],
+      "type": "object"
+    },
+    "answer": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "additionalProperties": false,
+          "properties": {
+            "confidence": {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            "question": {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "text": {
+              "maxLength": 16384,
+              "type": "string"
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "type": "object"
+        },
+        "kind": {
+          "const": "answer"
+        }
+      },
+      "required": [
+        "kind",
+        "data"
+      ],
+      "type": "object"
+    },
+    "assumption": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "additionalProperties": false,
+          "properties": {
+            "statement": {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "status": {
+              "enum": [
+                "open",
+                "validated",
+                "refuted"
+              ]
+            }
+          },
+          "required": [
+            "statement",
+            "status"
+          ],
+          "type": "object"
+        },
+        "kind": {
+          "const": "assumption"
+        }
+      },
+      "required": [
+        "kind",
+        "data"
+      ],
+      "type": "object"
+    },
+    "capability": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "additionalProperties": false,
+          "properties": {
+            "capabilities": {
+              "items": {
+                "maxLength": 256,
+                "type": "string"
+              },
+              "maxItems": 64,
+              "type": "array"
+            },
+            "cost": {
+              "enum": [
+                "low",
+                "medium",
+                "high"
+              ]
+            },
+            "description": {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "determinism": {
+              "enum": [
+                "deterministic",
+                "bounded-nondeterministic",
+                "nondeterministic"
+              ]
+            },
+            "input_schema": {
+              "maxLength": 1024,
+              "type": "string"
+            },
+            "name": {
+              "maxLength": 1024,
+              "type": "string"
+            },
+            "output_schema": {
+              "maxLength": 1024,
+              "type": "string"
+            },
+            "side_effects": {
+              "enum": [
+                "none",
+                "read-only",
+                "writes-filesystem",
+                "mutates-external",
+                "network",
+                "destructive"
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "description",
+            "input_schema",
+            "output_schema",
+            "determinism",
+            "side_effects",
+            "cost"
+          ],
+          "type": "object"
+        },
+        "kind": {
+          "const": "capability"
+        }
+      },
+      "required": [
+        "kind",
+        "data"
+      ],
+      "type": "object"
+    },
+    "decision": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "additionalProperties": false,
+          "properties": {
+            "alternatives": {
+              "items": {
+                "maxLength": 1024,
+                "type": "string"
+              },
+              "maxItems": 64,
+              "type": "array"
+            },
+            "rationale": {
+              "maxLength": 16384,
+              "type": "string"
+            },
+            "statement": {
+              "maxLength": 4096,
+              "type": "string"
+            }
+          },
+          "required": [
+            "statement"
+          ],
+          "type": "object"
+        },
+        "kind": {
+          "const": "decision"
+        }
+      },
+      "required": [
+        "kind",
+        "data"
+      ],
+      "type": "object"
+    },
+    "definition": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "additionalProperties": false,
+          "properties": {
+            "docs": {
+              "maxLength": 65536,
+              "type": "string"
+            },
+            "id": {
+              "maxLength": 1024,
+              "type": "string"
+            },
+            "kind": {
+              "maxLength": 128,
+              "type": "string"
+            },
+            "name": {
+              "maxLength": 512,
+              "type": "string"
+            },
+            "overlay": true,
+            "path": {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "signature": {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "summary": {
+              "maxLength": 4096,
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "kind"
+          ],
+          "type": "object"
+        },
+        "kind": {
+          "const": "definition"
+        }
+      },
+      "required": [
+        "kind",
+        "data"
+      ],
+      "type": "object"
+    },
+    "evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "additionalProperties": false,
+          "properties": {
+            "hash": {
+              "maxLength": 128,
+              "type": "string"
+            },
+            "kind": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "source": {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "summary": {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "weight": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "kind",
+            "summary"
+          ],
+          "type": "object"
+        },
+        "kind": {
+          "const": "evidence"
+        }
+      },
+      "required": [
+        "kind",
+        "data"
+      ],
+      "type": "object"
+    },
+    "evidence_data": {
+      "additionalProperties": false,
+      "properties": {
+        "hash": {
+          "maxLength": 128,
+          "type": "string"
+        },
+        "kind": {
+          "maxLength": 256,
+          "type": "string"
+        },
+        "source": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "summary": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "weight": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "kind",
+        "summary"
+      ],
+      "type": "object"
+    },
+    "extension": {
+      "additionalProperties": false,
+      "properties": {
+        "data": true,
+        "kind": {
+          "maxLength": 256,
+          "not": {
+            "enum": [
+              "message",
+              "question",
+              "answer",
+              "decision",
+              "action",
+              "assumption",
+              "summary",
+              "evidence",
+              "definition",
+              "capability",
+              "intent",
+              "plan",
+              "result",
+              "outcome"
+            ]
+          },
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "data"
+      ],
+      "type": "object"
+    },
+    "intent": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "additionalProperties": false,
+          "properties": {
+            "constraints": {
+              "items": {
+                "maxLength": 1024,
+                "type": "string"
+              },
+              "maxItems": 64,
+              "type": "array"
+            },
+            "statement": {
+              "maxLength": 4096,
+              "type": "string"
+            }
+          },
+          "required": [
+            "statement"
+          ],
+          "type": "object"
+        },
+        "kind": {
+          "const": "intent"
+        }
+      },
+      "required": [
+        "kind",
+        "data"
+      ],
+      "type": "object"
+    },
+    "message": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "additionalProperties": false,
+          "properties": {
+            "content": {
+              "maxLength": 16384,
+              "type": "string"
+            },
+            "reply_to": {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "role": {
+              "maxLength": 256,
+              "type": "string"
+            }
+          },
+          "required": [
+            "content"
+          ],
+          "type": "object"
+        },
+        "kind": {
+          "const": "message"
+        }
+      },
+      "required": [
+        "kind",
+        "data"
+      ],
+      "type": "object"
+    },
+    "outcome": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "additionalProperties": false,
+          "properties": {
+            "details": true,
+            "exit_code": {
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "message": {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "status": {
+              "enum": [
+                "success",
+                "partial",
+                "no_match",
+                "insufficient_evidence",
+                "blocked",
+                "error"
+              ]
+            }
+          },
+          "required": [
+            "status",
+            "kind",
+            "message"
+          ],
+          "type": "object"
+        },
+        "kind": {
+          "const": "outcome"
+        }
+      },
+      "required": [
+        "kind",
+        "data"
+      ],
+      "type": "object"
+    },
+    "plan": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "additionalProperties": false,
+          "properties": {
+            "goal": {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "normalization": {
+              "additionalProperties": false,
+              "properties": {
+                "max_rewrites": {
+                  "maximum": 4096,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "normalized": {
+                  "type": "boolean"
+                },
+                "trace": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "after": {
+                        "items": {
+                          "$ref": "#/$defs/plan_step"
+                        },
+                        "type": "array"
+                      },
+                      "before": {
+                        "items": {
+                          "$ref": "#/$defs/plan_step"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "before",
+                      "after"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 4096,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "normalized",
+                "max_rewrites"
+              ],
+              "type": "object"
+            },
+            "plan_hash": {
+              "maxLength": 128,
+              "type": "string"
+            },
+            "prerequisite_order": {
+              "items": {
+                "maxLength": 1024,
+                "type": "string"
+              },
+              "maxItems": 1024,
+              "type": "array"
+            },
+            "steps": {
+              "items": {
+                "$ref": "#/$defs/plan_step"
+              },
+              "maxItems": 4096,
+              "type": "array"
+            }
+          },
+          "required": [
+            "steps"
+          ],
+          "type": "object"
+        },
+        "kind": {
+          "const": "plan"
+        }
+      },
+      "required": [
+        "kind",
+        "data"
+      ],
+      "type": "object"
+    },
+    "plan_step": {
+      "additionalProperties": false,
+      "properties": {
+        "detail": true,
+        "kind": {
+          "maxLength": 256,
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "detail"
+      ],
+      "type": "object"
+    },
+    "question": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "additionalProperties": false,
+          "properties": {
+            "context": true,
+            "options": {
+              "items": {
+                "maxLength": 1024,
+                "type": "string"
+              },
+              "maxItems": 64,
+              "type": "array"
+            },
+            "text": {
+              "maxLength": 4096,
+              "type": "string"
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "type": "object"
+        },
+        "kind": {
+          "const": "question"
+        }
+      },
+      "required": [
+        "kind",
+        "data"
+      ],
+      "type": "object"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "additionalProperties": false,
+          "properties": {
+            "duration_micros": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "evidence": {
+              "items": {
+                "$ref": "#/$defs/evidence_data"
+              },
+              "maxItems": 1024,
+              "type": "array"
+            },
+            "output": true,
+            "refuted_assumptions": {
+              "items": {
+                "maxLength": 1024,
+                "type": "string"
+              },
+              "maxItems": 1024,
+              "type": "array"
+            },
+            "resources": {
+              "additionalProperties": false,
+              "properties": {
+                "bytes": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "iterations": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "nodes": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "operations": {
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "operations",
+                "nodes",
+                "iterations",
+                "bytes"
+              ],
+              "type": "object"
+            },
+            "score": {
+              "type": "number"
+            },
+            "validated_assumptions": {
+              "items": {
+                "maxLength": 1024,
+                "type": "string"
+              },
+              "maxItems": 1024,
+              "type": "array"
+            }
+          },
+          "required": [
+            "output"
+          ],
+          "type": "object"
+        },
+        "kind": {
+          "const": "result"
+        }
+      },
+      "required": [
+        "kind",
+        "data"
+      ],
+      "type": "object"
+    },
+    "summary": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "additionalProperties": false,
+          "properties": {
+            "of": {
+              "items": {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              "maxItems": 1024,
+              "type": "array"
+            },
+            "text": {
+              "maxLength": 16384,
+              "type": "string"
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "type": "object"
+        },
+        "kind": {
+          "const": "summary"
+        }
+      },
+      "required": [
+        "kind",
+        "data"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://industrialalgebra.com/schemas/lonis.block/v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "attribution": {
+      "additionalProperties": false,
       "properties": {
         "identity": {
-          "type": "string",
-          "maxLength": 1024
-        },
-        "viewpoint": {
-          "type": "string",
-          "maxLength": 1024
+          "maxLength": 1024,
+          "type": "string"
         },
         "provenance": {
-          "type": "object",
           "additionalProperties": false,
+          "properties": {
+            "producer": {
+              "maxLength": 1024,
+              "type": "string"
+            },
+            "when": {
+              "maxLength": 64,
+              "type": "string"
+            },
+            "where": {
+              "maxLength": 4096,
+              "type": "string"
+            }
+          },
           "required": [
             "when",
             "producer"
           ],
-          "properties": {
-            "when": {
-              "type": "string",
-              "maxLength": 64
-            },
-            "where": {
-              "type": "string",
-              "maxLength": 4096
-            },
-            "producer": {
-              "type": "string",
-              "maxLength": 1024
-            }
-          }
+          "type": "object"
+        },
+        "viewpoint": {
+          "maxLength": 1024,
+          "type": "string"
         }
-      }
+      },
+      "required": [
+        "identity",
+        "provenance"
+      ],
+      "type": "object"
     },
     "bounds": {
-      "type": "object",
       "additionalProperties": false,
       "properties": {
-        "max_items": {
-          "type": "integer",
-          "minimum": 0
-        },
         "max_bytes": {
-          "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_items": {
+          "minimum": 0,
+          "type": "integer"
         },
         "max_length": {
-          "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         },
         "timeout_millis": {
-          "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         }
-      }
+      },
+      "type": "object"
     },
     "payload": {
       "oneOf": [
@@ -211,758 +865,104 @@
           "$ref": "#/$defs/extension"
         }
       ]
+    },
+    "provenance": {
+      "additionalProperties": false,
+      "properties": {
+        "compatibility": {
+          "additionalProperties": false,
+          "properties": {
+            "reasons": {
+              "items": {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              "maxItems": 256,
+              "type": "array"
+            },
+            "status": {
+              "maxLength": 256,
+              "type": "string"
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "type": "object"
+        },
+        "input_hash": {
+          "maxLength": 128,
+          "type": "string"
+        },
+        "plan_hash": {
+          "maxLength": 128,
+          "type": "string"
+        },
+        "project_hash": {
+          "maxLength": 128,
+          "type": "string"
+        },
+        "replay": {
+          "additionalProperties": false,
+          "properties": {
+            "reasons": {
+              "items": {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              "maxItems": 256,
+              "type": "array"
+            },
+            "replayable": {
+              "type": "boolean"
+            },
+            "required_hashes": {
+              "items": {
+                "maxLength": 256,
+                "type": "string"
+              },
+              "maxItems": 64,
+              "type": "array"
+            }
+          },
+          "required": [
+            "replayable"
+          ],
+          "type": "object"
+        },
+        "result_hash": {
+          "maxLength": 128,
+          "type": "string"
+        },
+        "seed": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "tool_version": {
+          "maxLength": 256,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "lonis.block/v1"
+    },
+    "warnings": {
+      "items": {
+        "maxLength": 4096,
+        "type": "string"
+      },
+      "maxItems": 256,
+      "type": "array"
     }
   },
-  "$defs": {
-    "message": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "kind",
-        "data"
-      ],
-      "properties": {
-        "kind": {
-          "const": "message"
-        },
-        "data": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "content"
-          ],
-          "properties": {
-            "role": {
-              "type": "string",
-              "maxLength": 256
-            },
-            "content": {
-              "type": "string",
-              "maxLength": 16384
-            },
-            "reply_to": {
-              "type": "string",
-              "maxLength": 4096
-            }
-          }
-        }
-      }
-    },
-    "question": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "kind",
-        "data"
-      ],
-      "properties": {
-        "kind": {
-          "const": "question"
-        },
-        "data": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "text"
-          ],
-          "properties": {
-            "text": {
-              "type": "string",
-              "maxLength": 4096
-            },
-            "context": true,
-            "options": {
-              "type": "array",
-              "maxItems": 64,
-              "items": {
-                "type": "string",
-                "maxLength": 1024
-              }
-            }
-          }
-        }
-      }
-    },
-    "answer": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "kind",
-        "data"
-      ],
-      "properties": {
-        "kind": {
-          "const": "answer"
-        },
-        "data": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "text"
-          ],
-          "properties": {
-            "question": {
-              "type": "string",
-              "maxLength": 4096
-            },
-            "text": {
-              "type": "string",
-              "maxLength": 16384
-            },
-            "confidence": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 1
-            }
-          }
-        }
-      }
-    },
-    "decision": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "kind",
-        "data"
-      ],
-      "properties": {
-        "kind": {
-          "const": "decision"
-        },
-        "data": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "statement"
-          ],
-          "properties": {
-            "statement": {
-              "type": "string",
-              "maxLength": 4096
-            },
-            "rationale": {
-              "type": "string",
-              "maxLength": 16384
-            },
-            "alternatives": {
-              "type": "array",
-              "maxItems": 64,
-              "items": {
-                "type": "string",
-                "maxLength": 1024
-              }
-            }
-          }
-        }
-      }
-    },
-    "action": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "kind",
-        "data"
-      ],
-      "properties": {
-        "kind": {
-          "const": "action"
-        },
-        "data": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "verb",
-            "status"
-          ],
-          "properties": {
-            "verb": {
-              "type": "string",
-              "maxLength": 256
-            },
-            "target": {
-              "type": "string",
-              "maxLength": 4096
-            },
-            "parameters": true,
-            "status": {
-              "enum": [
-                "pending",
-                "running",
-                "completed",
-                "failed"
-              ]
-            }
-          }
-        }
-      }
-    },
-    "assumption": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "kind",
-        "data"
-      ],
-      "properties": {
-        "kind": {
-          "const": "assumption"
-        },
-        "data": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "statement",
-            "status"
-          ],
-          "properties": {
-            "statement": {
-              "type": "string",
-              "maxLength": 4096
-            },
-            "status": {
-              "enum": [
-                "open",
-                "validated",
-                "refuted"
-              ]
-            }
-          }
-        }
-      }
-    },
-    "summary": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "kind",
-        "data"
-      ],
-      "properties": {
-        "kind": {
-          "const": "summary"
-        },
-        "data": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "text"
-          ],
-          "properties": {
-            "of": {
-              "type": "array",
-              "maxItems": 1024,
-              "items": {
-                "type": "string",
-                "maxLength": 4096
-              }
-            },
-            "text": {
-              "type": "string",
-              "maxLength": 16384
-            }
-          }
-        }
-      }
-    },
-    "evidence": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "kind",
-        "data"
-      ],
-      "properties": {
-        "kind": {
-          "const": "evidence"
-        },
-        "data": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "kind",
-            "summary"
-          ],
-          "properties": {
-            "kind": {
-              "type": "string",
-              "maxLength": 256
-            },
-            "summary": {
-              "type": "string",
-              "maxLength": 4096
-            },
-            "source": {
-              "type": "string",
-              "maxLength": 4096
-            },
-            "hash": {
-              "type": "string",
-              "maxLength": 128
-            },
-            "weight": {
-              "type": "number"
-            }
-          }
-        }
-      }
-    },
-    "definition": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "kind",
-        "data"
-      ],
-      "properties": {
-        "kind": {
-          "const": "definition"
-        },
-        "data": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "id",
-            "name",
-            "kind"
-          ],
-          "properties": {
-            "id": {
-              "type": "string",
-              "maxLength": 1024
-            },
-            "name": {
-              "type": "string",
-              "maxLength": 512
-            },
-            "kind": {
-              "type": "string",
-              "maxLength": 128
-            },
-            "path": {
-              "type": "string",
-              "maxLength": 4096
-            },
-            "signature": {
-              "type": "string",
-              "maxLength": 4096
-            },
-            "summary": {
-              "type": "string",
-              "maxLength": 4096
-            },
-            "docs": {
-              "type": "string",
-              "maxLength": 65536
-            },
-            "overlay": true
-          }
-        }
-      }
-    },
-    "capability": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "kind",
-        "data"
-      ],
-      "properties": {
-        "kind": {
-          "const": "capability"
-        },
-        "data": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "name",
-            "description",
-            "input_schema",
-            "output_schema",
-            "determinism",
-            "side_effects",
-            "cost"
-          ],
-          "properties": {
-            "name": {
-              "type": "string",
-              "maxLength": 1024
-            },
-            "description": {
-              "type": "string",
-              "maxLength": 4096
-            },
-            "input_schema": {
-              "type": "string",
-              "maxLength": 1024
-            },
-            "output_schema": {
-              "type": "string",
-              "maxLength": 1024
-            },
-            "determinism": {
-              "enum": [
-                "deterministic",
-                "bounded-nondeterministic",
-                "nondeterministic"
-              ]
-            },
-            "side_effects": {
-              "enum": [
-                "none",
-                "read-only",
-                "writes-filesystem",
-                "mutates-external",
-                "network",
-                "destructive"
-              ]
-            },
-            "cost": {
-              "enum": [
-                "low",
-                "medium",
-                "high"
-              ]
-            },
-            "capabilities": {
-              "type": "array",
-              "maxItems": 64,
-              "items": {
-                "type": "string",
-                "maxLength": 256
-              }
-            }
-          }
-        }
-      }
-    },
-    "intent": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "kind",
-        "data"
-      ],
-      "properties": {
-        "kind": {
-          "const": "intent"
-        },
-        "data": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "statement"
-          ],
-          "properties": {
-            "statement": {
-              "type": "string",
-              "maxLength": 4096
-            },
-            "constraints": {
-              "type": "array",
-              "maxItems": 64,
-              "items": {
-                "type": "string",
-                "maxLength": 1024
-              }
-            }
-          }
-        }
-      }
-    },
-    "plan": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "kind",
-        "data"
-      ],
-      "properties": {
-        "kind": {
-          "const": "plan"
-        },
-        "data": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "steps"
-          ],
-          "properties": {
-            "goal": {
-              "type": "string",
-              "maxLength": 4096
-            },
-            "steps": {
-              "type": "array",
-              "maxItems": 4096,
-              "items": {
-                "$ref": "#/$defs/plan_step"
-              }
-            },
-            "prerequisite_order": {
-              "type": "array",
-              "maxItems": 1024,
-              "items": {
-                "type": "string",
-                "maxLength": 1024
-              }
-            },
-            "normalization": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "normalized",
-                "max_rewrites"
-              ],
-              "properties": {
-                "normalized": {
-                  "type": "boolean"
-                },
-                "max_rewrites": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 4096
-                },
-                "trace": {
-                  "type": "array",
-                  "maxItems": 4096,
-                  "items": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": [
-                      "before",
-                      "after"
-                    ],
-                    "properties": {
-                      "before": {
-                        "type": "array",
-                        "items": {
-                          "$ref": "#/$defs/plan_step"
-                        }
-                      },
-                      "after": {
-                        "type": "array",
-                        "items": {
-                          "$ref": "#/$defs/plan_step"
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            },
-            "plan_hash": {
-              "type": "string",
-              "maxLength": 128
-            }
-          }
-        }
-      }
-    },
-    "result": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "kind",
-        "data"
-      ],
-      "properties": {
-        "kind": {
-          "const": "result"
-        },
-        "data": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "output"
-          ],
-          "properties": {
-            "output": true,
-            "score": {
-              "type": "number"
-            },
-            "evidence": {
-              "type": "array",
-              "maxItems": 1024,
-              "items": {
-                "$ref": "#/$defs/evidence_data"
-              }
-            },
-            "validated_assumptions": {
-              "type": "array",
-              "maxItems": 1024,
-              "items": {
-                "type": "string",
-                "maxLength": 1024
-              }
-            },
-            "refuted_assumptions": {
-              "type": "array",
-              "maxItems": 1024,
-              "items": {
-                "type": "string",
-                "maxLength": 1024
-              }
-            },
-            "resources": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "operations",
-                "nodes",
-                "iterations",
-                "bytes"
-              ],
-              "properties": {
-                "operations": {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                "nodes": {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                "iterations": {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                "bytes": {
-                  "type": "integer",
-                  "minimum": 0
-                }
-              }
-            },
-            "duration_micros": {
-              "type": "integer",
-              "minimum": 0
-            }
-          }
-        }
-      }
-    },
-    "outcome": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "kind",
-        "data"
-      ],
-      "properties": {
-        "kind": {
-          "const": "outcome"
-        },
-        "data": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "status",
-            "kind",
-            "message"
-          ],
-          "properties": {
-            "status": {
-              "enum": [
-                "success",
-                "partial",
-                "no_match",
-                "insufficient_evidence",
-                "blocked",
-                "error"
-              ]
-            },
-            "kind": {
-              "type": "string",
-              "maxLength": 256
-            },
-            "message": {
-              "type": "string",
-              "maxLength": 4096
-            },
-            "details": true,
-            "exit_code": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 255
-            }
-          }
-        }
-      }
-    },
-    "extension": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "kind",
-        "data"
-      ],
-      "properties": {
-        "kind": {
-          "type": "string",
-          "maxLength": 256,
-          "not": {
-            "enum": [
-              "message",
-              "question",
-              "answer",
-              "decision",
-              "action",
-              "assumption",
-              "summary",
-              "evidence",
-              "definition",
-              "capability",
-              "intent",
-              "plan",
-              "result",
-              "outcome"
-            ]
-          }
-        },
-        "data": true
-      }
-    },
-    "plan_step": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "kind",
-        "detail"
-      ],
-      "properties": {
-        "kind": {
-          "type": "string",
-          "maxLength": 256
-        },
-        "detail": true
-      }
-    },
-    "evidence_data": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "kind",
-        "summary"
-      ],
-      "properties": {
-        "kind": {
-          "type": "string",
-          "maxLength": 256
-        },
-        "summary": {
-          "type": "string",
-          "maxLength": 4096
-        },
-        "source": {
-          "type": "string",
-          "maxLength": 4096
-        },
-        "hash": {
-          "type": "string",
-          "maxLength": 128
-        },
-        "weight": {
-          "type": "number"
-        }
-      }
-    }
-  }
+  "required": [
+    "schema_version",
+    "attribution",
+    "payload"
+  ],
+  "title": "lonis.block envelope",
+  "type": "object",
+  "x-lonis-protocol-version": "lonis.block/v1"
 }

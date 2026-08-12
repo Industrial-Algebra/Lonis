@@ -23,7 +23,8 @@ blocks in any language.
   kind (14) plus `block-v1.json` (the envelope, whose `payload` is a `oneOf`
   over all kinds via `$defs`).
 - **Per-kind files are the source of truth**; `block-v1.json` is *composed*
-  from them by a checked-in script (`schemas/compose_block_schema.py`),
+  from them by a checked-in example
+  (`cargo run -p lonis-schema --example compose_block_schema`),
   hoisting nested `$defs` with collision detection. No dual authoring.
 - `$id`s mirror the `schema_id()` convention:
   `https://industrialalgebra.com/schemas/lonis.block/<kind>/v1`; each
@@ -53,8 +54,10 @@ blocks in any language.
 - `lonis-schema` gains `jsonschema` as a dev-dependency only; the schemas
   are data, not code — zero runtime cost beyond the embedded text.
 - Regeneration discipline: schemas after intentional wire changes
-  (`compose_block_schema.py`), goldens after intentional shape changes
-  (`dump_golden_blocks`); both leave an auditable diff.
+  (`cargo run -p lonis-schema --example compose_block_schema`), goldens
+  after intentional shape changes
+  (`cargo run -p lonis-schema --example dump_golden_blocks`); both leave an
+  auditable diff.
 
 ## Erratum (2026-08-10, issue #10)
 
