@@ -206,6 +206,9 @@
         },
         {
           "$ref": "#/$defs/outcome"
+        },
+        {
+          "$ref": "#/$defs/extension"
         }
       ]
     }
@@ -882,6 +885,39 @@
             }
           }
         }
+      }
+    },
+    "extension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "data"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "maxLength": 256,
+          "not": {
+            "enum": [
+              "message",
+              "question",
+              "answer",
+              "decision",
+              "action",
+              "assumption",
+              "summary",
+              "evidence",
+              "definition",
+              "capability",
+              "intent",
+              "plan",
+              "result",
+              "outcome"
+            ]
+          }
+        },
+        "data": true
       }
     },
     "plan_step": {

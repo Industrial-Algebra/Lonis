@@ -189,6 +189,13 @@ fn goldens() -> Vec<(&'static str, SeedBlock)> {
                 exit_code: Some(4),
             })),
         ),
+        (
+            "extension",
+            block(BlockKind::Extension {
+                kind: "karpal.search".into(),
+                data: serde_json::json!({"query": "Functor", "results": ["karpal-proof"]}),
+            }),
+        ),
     ]
 }
 
@@ -205,5 +212,5 @@ fn main() {
     let mut bytes = serde_json::to_vec_pretty(&serde_json::Value::Object(hashes)).unwrap();
     bytes.push(b'\n');
     std::fs::write(dir.join("hashes.json"), bytes).unwrap();
-    println!("wrote 14 golden blocks + hashes.json to {}", dir.display());
+    println!("wrote 15 golden blocks + hashes.json to {}", dir.display());
 }

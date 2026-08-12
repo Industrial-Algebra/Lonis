@@ -55,3 +55,20 @@ blocks in any language.
 - Regeneration discipline: schemas after intentional wire changes
   (`compose_block_schema.py`), goldens after intentional shape changes
   (`dump_golden_blocks`); both leave an auditable diff.
+
+## Erratum (2026-08-10, issue #10)
+
+As merged, `block-v1.json`'s `payload.oneOf` admitted only the 14 seed
+kinds — so a vertical `Extension` payload (the entire ADR-0002/0004 use
+case) parsed fine as a `SeedBlock` but **failed schema validation**: a
+schema↔serde inconsistency at exactly the seam this ADR claimed to pin,
+found by the karpal-discovery consumer. Fixed the same day: a 15th
+`extension` branch (`kind`: any string *not* in the seed enum — keeping the
+branches disjoint, so a seed tag with bad data can't escape through the
+seam — and `data: true`, faithful to `BlockKind::Extension`'s arbitrary
+`Value`), a matching `BlockSchemaKind::Extension` family, and an
+`extension` golden. Catalog is now 16 families; 15 goldens.
+
+**Lesson recorded:** schema coverage must include the catch-all
+*first* — the open seam is the most important branch to validate, not an
+afterthought.
