@@ -338,8 +338,17 @@ pub fn json_content_hash(value: &Value) -> String {
     sha256_hex(&canonical_json_string(value))
 }
 
-/// Serialize a value with object keys recursively sorted, so semantically
-/// equal payloads hash identically regardless of map insertion order.
+/// Serialize a value with object keys recursively sorted and numbers
+/// normalized (ADR-0007), so semantically equal payloads hash identically
+/// across producers.
+///
+/// Number normalization: integral floats collapse to integers (`100.0`,
+/// `1e2` → `100`), and negative zero collapses to `0`. Non-integral floats
+/// keep serde_json's shortest-round-trip (ryu) rendering; integers are
+/// exact at any width (no f64 round-trip). Residual limitation: producers
+/// emitting exotic float spellings (e.g. `0.30000000000000004` vs `0.3`)
+/// still hash differently — hash-critical values should be integers or
+/// strings when cross-producer equality matters.
 fn canonical_json_string(value: &Value) -> String {
     fn sorted(value: &Value) -> Value {
         match value {
@@ -349,6 +358,7 @@ fn canonical_json_string(value: &Value) -> String {
                 .collect::<serde_json::Map<String, Value>>()
                 .into(),
             Value::Array(items) => items.iter().map(sorted).collect(),
+            Value::Number(number) => normalize_number(number),
             scalar => scalar.clone(),
         }
     }
@@ -356,6 +366,29 @@ fn canonical_json_string(value: &Value) -> String {
     // BTree-ordered; the explicit sort keeps the hash stable if that feature
     // is ever enabled downstream.
     serde_json::to_string(&sorted(value)).expect("canonical JSON serialization is infallible")
+}
+
+/// Normalize a JSON number for hashing: integral floats → integers,
+/// negative zero → zero. Everything else keeps its exact form.
+fn normalize_number(number: &serde_json::Number) -> Value {
+    if let Some(float) = number.as_f64() {
+        if number.is_f64() {
+            if float == 0.0 {
+                return Value::from(0_u64);
+            }
+            if float.fract() == 0.0 && float.abs() <= 9_007_199_254_740_992.0 {
+                // Integral float within the exactly-representable range.
+                #[allow(clippy::cast_possible_truncation)]
+                {
+                    if float < 0.0 {
+                        return Value::from(float as i64);
+                    }
+                    return Value::from(float as u64);
+                }
+            }
+        }
+    }
+    Value::Number(number.clone())
 }
 
 fn sha256_hex(input: &str) -> String {
@@ -632,6 +665,55 @@ mod tests {
         let b = json_content_hash(&json!({"y": {"q": 2, "p": 1}, "x": 1}));
         assert_eq!(a, b);
         assert_eq!(a.len(), 64);
+    }
+
+    // -- Canonicalization hardening (ADR-0007): cross-producer number forms --
+
+    #[test]
+    fn hash_normalizes_number_forms() {
+        // 100 (int), 100.0 (float), 1e2 (exponent) are the same value; a
+        // Python producer emitting 100.0 and a Rust producer emitting 100
+        // must agree on the hash.
+        let int = json_content_hash(&json!({"n": 100}));
+        let float = json_content_hash(&json!({"n": 100.0}));
+        let exp =
+            json_content_hash(&serde_json::from_str::<serde_json::Value>("{\"n\": 1e2}").unwrap());
+        assert_eq!(int, float);
+        assert_eq!(int, exp);
+    }
+
+    #[test]
+    fn hash_normalizes_negative_zero() {
+        let pos = json_content_hash(&json!({"n": 0}));
+        let neg = json_content_hash(&json!({"n": -0.0}));
+        assert_eq!(pos, neg);
+    }
+
+    #[test]
+    fn hash_preserves_non_integral_floats() {
+        let a = json_content_hash(&json!({"n": 0.9}));
+        let b = json_content_hash(&json!({"n": 0.95}));
+        assert_ne!(a, b);
+        // Stability: same float, same hash.
+        assert_eq!(a, json_content_hash(&json!({"n": 0.9})));
+    }
+
+    #[test]
+    fn hash_handles_large_integers_exactly() {
+        // u64 beyond 2^53 must not be routed through f64.
+        let big: u64 = 9_007_199_254_740_993; // 2^53 + 1
+        let a = json_content_hash(&json!({"n": big}));
+        let b = json_content_hash(&json!({"n": big}));
+        assert_eq!(a, b);
+        let other = json_content_hash(&json!({"n": big - 1}));
+        assert_ne!(a, other);
+    }
+
+    #[test]
+    fn hash_normalizes_nested_numbers() {
+        let a = json_content_hash(&json!({"outer": [{"n": 7.0}, 1e3]}));
+        let b = json_content_hash(&json!({"outer": [{"n": 7}, 1000]}));
+        assert_eq!(a, b);
     }
 
     #[test]
