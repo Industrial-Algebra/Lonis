@@ -16,6 +16,7 @@ path = "src/lib.rs"
 default = ["core"]
 core = ["dep:lonis-core"]
 derive = ["lonis-schema/derive"]
+futures = ["lonis-core/futures"]
 
 [dependencies]
 lonis-schema = { workspace = true }

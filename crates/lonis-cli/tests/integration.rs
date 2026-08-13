@@ -84,6 +84,28 @@ fn call_echo_accepts_at_file_input() {
 }
 
 #[test]
+fn call_echo_streams_with_flag() {
+    let output = Command::cargo_bin("lonis")
+        .unwrap()
+        .args([
+            "call",
+            "lonis:builtin:echo",
+            "{\"stream\":true}",
+            "--stream",
+            "--mode",
+            "ndjson",
+        ])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let text = String::from_utf8(output.stdout).unwrap();
+    let line_count = text.lines().count();
+    assert_eq!(line_count, 1);
+    let block: SeedBlock = serde_json::from_str(text.trim()).unwrap();
+    assert_eq!(block.payload().kind_name(), "result");
+}
+
+#[test]
 fn schema_list_shows_all_families() {
     let output = Command::cargo_bin("lonis")
         .unwrap()

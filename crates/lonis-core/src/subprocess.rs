@@ -28,7 +28,7 @@ use std::io::Write as _;
 use std::path::PathBuf;
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use lonis_schema::block::kinds::{BlockKind, ResultPayload};
@@ -38,7 +38,8 @@ use lonis_schema::{
     ToolId,
 };
 
-use crate::Tool;
+use crate::stream::{ChildGuard, STREAM_BUFFER};
+use crate::{BlockStream, Tool};
 
 const FORMATS: [OutputMode; 3] = [OutputMode::Human, OutputMode::Json, OutputMode::Ndjson];
 const EXIT_MAP: &[(&str, u8)] = &[
@@ -535,6 +536,161 @@ impl Tool<BlockKind> for SubprocessTool {
                 json_content_hash(&input),
             )]),
         }
+    }
+
+    fn invoke_stream(&self, input: serde_json::Value) -> Result<BlockStream<BlockKind>, ToolError> {
+        // Text mapping has no incremental meaning — collect, then stream.
+        if self.mapping == StdoutMapping::Text {
+            return Ok(BlockStream::from_blocks(self.invoke(input)?));
+        }
+        let availability = self.availability();
+        if !availability.is_ready() {
+            return Err(self.unavailable_error(&availability));
+        }
+
+        let mut command = Command::new(&self.command);
+        command
+            .args(&self.args)
+            .env_clear()
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .current_dir(self.neutral_cwd());
+        if let Some(path) = std::env::var_os("PATH") {
+            command.env("PATH", path);
+        }
+        command.envs(self.env.iter().cloned());
+
+        let mut child = command.spawn().map_err(|err| {
+            ToolError::new(
+                "io",
+                format!("failed to spawn `{}`: {err}", self.command.display()),
+                exit_code::IO,
+            )
+        })?;
+        if let Some(mut stdin) = child.stdin.take() {
+            let _ = stdin.write_all(input.to_string().as_bytes());
+        }
+
+        let child = Arc::new(Mutex::new(child));
+        let (tx, rx) = std::sync::mpsc::sync_channel(STREAM_BUFFER);
+        let cap_hit = Arc::new(AtomicBool::new(false));
+
+        // Stdout parser: ndjson lines become blocks as they arrive
+        // (streaming subprocesses emit one block per line, ADR-0009).
+        let parser = {
+            let child = Arc::clone(&child);
+            let cap_hit = Arc::clone(&cap_hit);
+            let tx = tx.clone();
+            let max = self.max_stdout_bytes;
+            std::thread::spawn(move || {
+                let stdout = child.lock().unwrap().stdout.take().expect("stdout piped");
+                let mut reader = std::io::BufReader::new(stdout);
+                let mut line = String::new();
+                let mut total: u64 = 0;
+                loop {
+                    line.clear();
+                    match std::io::BufRead::read_line(&mut reader, &mut line) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => {
+                            total += n as u64;
+                            if total > max {
+                                cap_hit.store(true, Ordering::Relaxed);
+                                break;
+                            }
+                            let trimmed = line.trim();
+                            if trimmed.is_empty() {
+                                continue;
+                            }
+                            let item = serde_json::from_str::<SeedBlock>(trimmed).map_err(|err| {
+                                ToolError::new(
+                                    "invalid_output",
+                                    format!("streamed line is not a block: {err}"),
+                                    exit_code::SERIALIZATION,
+                                )
+                            });
+                            if tx.send(item).is_err() {
+                                break; // consumer dropped the stream
+                            }
+                        }
+                    }
+                }
+            })
+        };
+
+        // Stderr drain: bounded buffer for the final error mapping.
+        let stderr_buf = Arc::new(Mutex::new(Vec::new()));
+        let stderr_drain = {
+            let child = Arc::clone(&child);
+            let stderr_buf = Arc::clone(&stderr_buf);
+            let max = self.max_stderr_bytes;
+            std::thread::spawn(move || {
+                let stderr = child.lock().unwrap().stderr.take().expect("stderr piped");
+                let mut reader = stderr;
+                let mut chunk = [0_u8; 8192];
+                loop {
+                    match std::io::Read::read(&mut reader, &mut chunk) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => {
+                            let mut buf = stderr_buf.lock().unwrap();
+                            if (buf.len() as u64) < max {
+                                let room = (max - buf.len() as u64) as usize;
+                                buf.extend_from_slice(&chunk[..n.min(room)]);
+                            }
+                        }
+                    }
+                }
+            })
+        };
+
+        // Supervisor: bounds enforcement + terminal error, same discipline
+        // as exec_bounded but concurrent with delivery.
+        let timeout = self.timeout;
+        let supervisor_child = Arc::clone(&child);
+        std::thread::spawn(move || {
+            let start = Instant::now();
+            loop {
+                if cap_hit.load(Ordering::Relaxed) {
+                    kill_and_reap(&mut supervisor_child.lock().unwrap());
+                    let _ = tx.send(Err(ToolError::new(
+                        "output_limit_exceeded",
+                        "stream exceeded its stdout byte cap",
+                        exit_code::LIMIT_EXCEEDED,
+                    )));
+                    break;
+                }
+                if start.elapsed() > timeout {
+                    kill_and_reap(&mut supervisor_child.lock().unwrap());
+                    let _ = tx.send(Err(ToolError::new(
+                        "timeout",
+                        format!("stream exceeded its {}ms timeout", timeout.as_millis()),
+                        exit_code::LIMIT_EXCEEDED,
+                    )));
+                    break;
+                }
+                let status = {
+                    let mut guard = supervisor_child.lock().unwrap();
+                    match guard.try_wait() {
+                        Ok(status) => status,
+                        Err(_) => break, // reaped externally (stream dropped)
+                    }
+                };
+                match status {
+                    Some(status) => {
+                        let _ = parser.join();
+                        let _ = stderr_drain.join();
+                        if !status.success() {
+                            let stderr = stderr_buf.lock().unwrap();
+                            let _ = tx.send(Err(map_failure(&status, &stderr)));
+                        }
+                        break;
+                    }
+                    None => std::thread::sleep(POLL_INTERVAL),
+                }
+            }
+        });
+
+        Ok(BlockStream::from_channel(rx, ChildGuard(child)))
     }
 
     fn contract(&self) -> Option<ToolContract> {

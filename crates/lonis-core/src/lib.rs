@@ -18,9 +18,11 @@
 #![forbid(unsafe_code)]
 
 pub mod provider;
+pub mod stream;
 pub mod subprocess;
 
 pub use provider::{ProviderManifest, ProviderToolList, ProviderToolSummary, SubprocessProvider};
+pub use stream::BlockStream;
 
 pub use subprocess::{Availability, StdoutMapping, SubprocessTool};
 
@@ -51,6 +53,20 @@ pub trait Tool<P: BlockPayload>: Capabilities {
     /// # Errors
     /// Returns a [`ToolError`] (serialized to stderr) on failure.
     fn invoke(&self, input: serde_json::Value) -> Result<Vec<Block<P>>, ToolError>;
+
+    /// Invoke the tool, streaming blocks as they are produced (ADR-0009).
+    ///
+    /// The default collects [`Tool::invoke`] and replays it as a stream;
+    /// tools with genuine incremental output (e.g. [`crate::SubprocessTool`]
+    /// over ndjson) override this. A failed invocation yields its
+    /// [`ToolError`] as the stream's final item.
+    ///
+    /// # Errors
+    /// Returns immediately on startup errors (unknown tool, unavailable
+    /// binary); mid-stream failures surface as stream items.
+    fn invoke_stream(&self, input: serde_json::Value) -> Result<BlockStream<P>, ToolError> {
+        Ok(BlockStream::from_blocks(self.invoke(input)?))
+    }
 
     /// The tool's declared contract, if any (used by `lonis tools describe`).
     ///
@@ -128,6 +144,26 @@ impl<P: BlockPayload> ToolRegistry<P> {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.tools.is_empty()
+    }
+
+    /// Invoke a tool by id, streaming blocks as produced (ADR-0009).
+    ///
+    /// # Errors
+    /// [`ToolError`] with kind `not_found` (exit code 3) if the id is unknown;
+    /// otherwise the tool's startup error.
+    pub fn invoke_stream(
+        &self,
+        id: &str,
+        input: serde_json::Value,
+    ) -> Result<BlockStream<P>, ToolError> {
+        match self.tools.get(id) {
+            Some(tool) => tool.invoke_stream(input),
+            None => Err(ToolError::new(
+                "not_found",
+                format!("no tool with id `{id}`"),
+                exit_code::NOT_FOUND,
+            )),
+        }
     }
 
     /// Invoke a tool by id with the given input.
@@ -225,6 +261,62 @@ pub fn run_tool<P: BlockPayload>(
 
 fn io_err(e: serde_json::Error) -> std::io::Error {
     std::io::Error::other(e)
+}
+
+/// Run a tool streaming its blocks (ADR-0009), rendering incrementally to
+/// stdout and a terminal error to stderr with its exit code.
+///
+/// - `Ndjson`/`Human` render each block as it arrives,
+/// - `Json` buffers and emits one array at the end (a valid JSON document
+///   cannot be emitted incrementally),
+/// - a terminal [`ToolError`] item renders to stderr and ends the run with
+///   its exit code; blocks delivered before it stay on stdout.
+#[must_use]
+pub fn run_stream<P: BlockPayload>(
+    registry: &ToolRegistry<P>,
+    id: &str,
+    input: serde_json::Value,
+    mode: OutputMode,
+) -> u8 {
+    let stream = match registry.invoke_stream(id, input) {
+        Ok(stream) => stream,
+        Err(err) => {
+            let code = err.exit_code;
+            let _ = render_error(&err, mode, &mut std::io::stderr());
+            return code;
+        }
+    };
+    let mut buffered = Vec::new();
+    for item in stream {
+        match item {
+            Ok(block) => match mode {
+                OutputMode::Json => buffered.push(block),
+                OutputMode::Ndjson => {
+                    let _ = writeln!(
+                        std::io::stdout(),
+                        "{}",
+                        serde_json::to_string(&block).unwrap_or_else(|_| "null".into())
+                    );
+                }
+                OutputMode::Human => {
+                    let _ = writeln!(std::io::stdout(), "{}", block.render_human());
+                }
+            },
+            Err(err) => {
+                let code = err.exit_code;
+                let _ = render_error(&err, mode, &mut std::io::stderr());
+                return code;
+            }
+        }
+    }
+    if mode == OutputMode::Json {
+        let _ = writeln!(
+            std::io::stdout(),
+            "{}",
+            serde_json::to_string(&buffered).unwrap_or_else(|_| "[]".into())
+        );
+    }
+    exit_code::SUCCESS
 }
 
 #[cfg(test)]
