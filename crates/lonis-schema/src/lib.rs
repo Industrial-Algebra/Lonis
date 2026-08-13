@@ -27,6 +27,7 @@
 pub mod block;
 
 pub use block::kinds::{BlockCategory, BlockKind};
+pub use block::replay::{verify_replay, HashMismatch, ObservedHashes, ReplayStatus};
 pub use block::{
     json_content_hash, now_rfc3339, Attribution, AttributionSource, Block, BlockBounds,
     BlockPayload, Compatibility, ReplayMetadata, ReplayProvenance, SeedBlock, BLOCK_SCHEMA_V1,

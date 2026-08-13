@@ -16,6 +16,7 @@ use serde_json::Value;
 use crate::SchemaVersion;
 
 pub mod kinds;
+pub mod replay;
 pub mod schemas;
 
 pub use kinds::BlockKind;
