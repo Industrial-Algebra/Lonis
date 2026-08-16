@@ -1,0 +1,41 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Verify the matrix before publishing
+        run: |
+          cargo fmt --all --check
+          cargo clippy --all-targets --all-features -- -D warnings
+          cargo test --workspace --all-features
+
+      # Dependency order; crates.io index propagation needs a beat between
+      # publishes.
+      - name: Publish lonis-derive
+        run: cargo publish -p lonis-derive --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Publish lonis-schema
+        run: |
+          sleep 30
+          cargo publish -p lonis-schema --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Publish lonis-core
+        run: |
+          sleep 30
+          cargo publish -p lonis-core --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Publish lonis-cli
+        run: |
+          sleep 30
+          cargo publish -p lonis-cli --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Publish lonis (facade)
+        run: |
+          sleep 30
+          cargo publish -p lonis --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
