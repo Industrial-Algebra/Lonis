@@ -13,3 +13,11 @@ repository.workspace = true
 lonis-schema = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+futures-core = { workspace = true, optional = true }
+futures-channel = { workspace = true, optional = true }
+
+[features]
+futures = ["dep:futures-core", "dep:futures-channel"]
+
+[dev-dependencies]
+futures = "0.3"

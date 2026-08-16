@@ -46,5 +46,6 @@ pub use lonis_schema::LonisCapabilities;
 
 #[cfg(feature = "core")]
 pub use lonis_core::{
-    render, render_error, run_tool, Availability, StdoutMapping, SubprocessTool, Tool, ToolRegistry,
+    render, render_error, run_stream, run_tool, Availability, BlockStream, StdoutMapping,
+    SubprocessProvider, SubprocessTool, Tool, ToolRegistry,
 };

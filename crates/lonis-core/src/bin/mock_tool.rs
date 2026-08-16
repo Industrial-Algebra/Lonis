@@ -178,6 +178,30 @@ fn run(mode: &str, args: &[String]) {
             eprintln!("{}", serde_json::to_string(&err).unwrap());
             std::process::exit(3);
         }
+        "--stream" => {
+            let n: usize = args.get(1).map_or(3, |v| v.parse().unwrap());
+            for i in 0..n {
+                let block = result_block(serde_json::json!({"seq": i}));
+                println!("{}", serde_json::to_string(&block).unwrap());
+                // stdout is block-buffered on pipes — flush so the host sees
+                // blocks incrementally.
+                std::io::Write::flush(&mut std::io::stdout()).ok();
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+        }
+        "--stream-fail" => {
+            let block = result_block(serde_json::json!({"before": "failure"}));
+            println!("{}", serde_json::to_string(&block).unwrap());
+            std::io::Write::flush(&mut std::io::stdout()).ok();
+            let err = ToolError::new("mock_failure", "the mock failed deliberately", 3)
+                .with_details(serde_json::json!({"deliberate": true}));
+            eprintln!("{}", serde_json::to_string(&err).unwrap());
+            std::process::exit(3);
+        }
+        "--stream-sleep" => {
+            let millis: u64 = args.get(1).map_or(30_000, |v| v.parse().unwrap());
+            std::thread::sleep(std::time::Duration::from_millis(millis));
+        }
         "--fail-plain" => {
             eprintln!("boom");
             std::process::exit(2);

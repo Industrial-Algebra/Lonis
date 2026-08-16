@@ -90,6 +90,16 @@ the host). Exceeding either **kills your process** and reports
 `LIMIT_EXCEEDED` (exit 7). Stream incrementally and keep payloads small;
 large results belong in files referenced by blocks, not in blocks.
 
+### 5a. Streaming: emit ndjson, one block per line, and flush
+
+Hosts may invoke you with `invoke_stream` (ADR-0009): blocks are delivered
+to the consumer *as they arrive*. For streaming to work: emit **one block
+per line** (ndjson), and **flush after each line** — language runtimes
+block-buffer stdout on pipes (Rust's `println!` included), so without an
+explicit flush your blocks arrive in one burst at exit. Timeouts and byte
+caps still apply mid-stream, and if the consumer drops the stream your
+process is killed.
+
 ### 6. Plain-text legacy CLIs still work
 
 With `StdoutMapping::Text`, the host wraps raw stdout in an attributed

@@ -68,6 +68,9 @@ enum Command {
         id: String,
         /// JSON input value, or `@<path>` to a JSON file.
         input: Option<String>,
+        /// Stream blocks as the tool produces them (ADR-0009).
+        #[arg(long)]
+        stream: bool,
     },
 }
 
@@ -185,7 +188,7 @@ fn main() -> ExitCode {
                 }
             },
         },
-        Command::Call { id, input } => {
+        Command::Call { id, input, stream } => {
             let value = match parse_input(input.as_deref()) {
                 Ok(value) => value,
                 Err(err) => {
@@ -193,7 +196,11 @@ fn main() -> ExitCode {
                     return ExitCode::from(exit_code::INVALID_INPUT);
                 }
             };
-            ExitCode::from(run_tool(&registry, &id, value, mode))
+            if stream {
+                ExitCode::from(lonis_core::run_stream(&registry, &id, value, mode))
+            } else {
+                ExitCode::from(run_tool(&registry, &id, value, mode))
+            }
         }
     }
 }

@@ -31,3 +31,5 @@ lonis-derive = { version = "0.0.1", path = "crates/lonis-derive" }
 syn = "2"
 quote = "1"
 proc-macro2 = "1"
+futures-core = "0.3"
+futures-channel = "0.3"
