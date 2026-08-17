@@ -5,6 +5,9 @@ An **AI-native tool harness** for the
 machine-readable alternative to MCP for exposing sharply bounded tool surfaces
 to agents. *"MCP exposes servers to models; Lonis exposes tools to agents."*
 
+**Documentation**: [lonis-tooling.netlify.app](https://lonis-tooling.netlify.app)
+(mdBook, deployed on release tags).
+
 > **Status:** the harness runtime has landed. The original Python
 > bitmap-vision analyzer has been spun out to
 > [Perceptron](https://github.com/Industrial-Algebra/Perceptron)
