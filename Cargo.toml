@@ -1,0 +1,35 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/lonis-schema",
+    "crates/lonis-derive",
+    "crates/lonis-core",
+    "crates/lonis-cli",
+    "crates/lonis",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "Apache-2.0"
+authors = ["Industrial Algebra"]
+repository = "https://github.com/Industrial-Algebra/Lonis"
+homepage = "https://github.com/Industrial-Algebra/Lonis"
+description = "Lonis — an AI-native tool harness for the Anima ecosystem"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+sha2 = "0.10"
+time = { version = "0.3", features = ["std", "formatting"] }
+clap = { version = "4", features = ["derive"] }
+lonis-schema = { version = "0.1.0", path = "crates/lonis-schema" }
+lonis-core = { version = "0.1.0", path = "crates/lonis-core" }
+lonis-derive = { version = "0.1.0", path = "crates/lonis-derive" }
+syn = "2"
+quote = "1"
+proc-macro2 = "1"
+futures-core = "0.3"
+futures-channel = "0.3"

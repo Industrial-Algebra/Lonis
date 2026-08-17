@@ -1,112 +1,49 @@
 # Lonis
 
-Bitmap-to-structured-design-data analyzer. Named after Achewood's Lonis Edison, inventor of "Perceived Goods."
+An **AI-native tool harness** for the
+[Anima](https://github.com/Industrial-Algebra) ecosystem — a local-first,
+machine-readable alternative to MCP for exposing sharply bounded tool surfaces
+to agents. *"MCP exposes servers to models; Lonis exposes tools to agents."*
 
-## What It Does
+**Documentation**: [lonis-tooling.netlify.app](https://lonis-tooling.netlify.app)
+(mdBook, deployed on release tags).
 
-Lonis extracts precise, measured design data from bitmap images and outputs it as structured JSON. It solves the problem of vision encoders *interpreting* rather than *measuring* — so you get exact hex codes, spatial relationships, and texture properties instead of guesses.
+> **Status:** the harness runtime has landed. The original Python
+> bitmap-vision analyzer has been spun out to
+> [Perceptron](https://github.com/Industrial-Algebra/Perceptron)
+> (tagged here as `lonis-python-legacy-v0.1.0`). Primary consumer is
+> agents/LLMs, not humans.
 
-```
-image → [Color] → [Spatial] → [Edge] → [Gradient] → [Texture] → JSON
-```
+## Workspace
 
-## Install
+- **`crates/lonis`** — the umbrella facade: one crate for consumers,
+  re-exporting schema + derive + core (serde-style).
+- **`crates/lonis-schema`** — the contract layer: the `Block<P>` structured
+  domain object (doctrine §2.7) with the 14-kind seed corpus, attribution,
+  bounds, replay provenance, content hashing; `Capabilities` /
+  `ToolContract`; structured `ToolError`.
+- **`crates/lonis-derive`** — `#[derive(LonisCapabilities)]` from
+  `#[lonis(tool_id = "...")]`.
+- **`crates/lonis-core`** — the harness runtime: `Tool<P>` /
+  `ToolRegistry<P>`, per-mode rendering, `run_tool` (stdout blocks /
+  stderr errors), and `SubprocessTool` (bounded external CLI adapter).
+- **`crates/lonis-cli`** — the `lonis` binary: `tools list`/`describe`,
+  `call <id> [input | @file]`, `--mode human|json|ndjson`.
 
-```bash
-git clone git@github.com:justinelliottcobb/Lonis.git
-cd Lonis
-pip install -e .
-```
+## ADRs
 
-## Usage
+- [`docs/adr/0001-block-contract.md`](docs/adr/0001-block-contract.md) — the `Block` contract; `invoke → Vec<Block>`; extraction direction (amari-discovery deletes into lonis-schema).
+- [`docs/adr/0002-typed-block-payloads.md`](docs/adr/0002-typed-block-payloads.md) — `Block<P: BlockPayload>`; verticals get fully-typed registries, erasure only at the subprocess seam.
+- [`docs/adr/0003-subprocess-tool-protocol.md`](docs/adr/0003-subprocess-tool-protocol.md) — the external CLI wire protocol (stdin JSON in / blocks out / structured errors on stderr / bounded + isolated).
 
-```bash
-# Full analysis
-lonis analyze photo.png
+## Design docs
 
-# Output to file
-lonis analyze photo.png -o analysis.json
+- [`docs/plans/lonis-harness-design-draft.md`](docs/plans/lonis-harness-design-draft.md) — the overarching harness design.
+- [`docs/plans/lonis-schema-design.md`](docs/plans/lonis-schema-design.md) — the contract layer.
+- [`docs/plans/lonis-provider-interface-spec-v0.md`](docs/plans/lonis-provider-interface-spec-v0.md),
+  [`lonis-external-provider-protocol-spec-v0.md`](docs/plans/lonis-external-provider-protocol-spec-v0.md) — provider model.
+- [`docs/lonis-legacy-and-future-context.md`](docs/lonis-legacy-and-future-context.md) — the Lonis/Perceptron split rationale.
 
-# Select specific analyzers
-lonis analyze photo.png --only color,spatial
+## License
 
-# Verbose with timing
-lonis analyze photo.png -v
-```
-
-## Analyzers
-
-| Analyzer | What It Measures |
-|----------|-----------------|
-| **color** | Dominant colors via KMeans clustering, hex/RGB/HSL values, palette, color temperature, contrast ratio |
-| **spatial** | Grid detection (columns, rows, gutters), distinct visual regions with bounding boxes |
-| **edge** | Contour detection, shape classification (rectangle, ellipse, triangle), edge density, dominant angles |
-| **gradient** | Global gradient direction, luminance range (min/max/mean), color transitions with strength |
-| **texture** | Surface roughness, glossiness, uniformity — from Laplacian and local contrast analysis |
-
-## Output
-
-```json
-{
-  "metadata": {
-    "filename": "photo.png",
-    "dimensions": [1680, 720],
-    "format": "PNG",
-    "analyzed_at": "2026-03-06T18:26:47Z",
-    "analyzers_run": ["color", "spatial", "edge", "gradient", "texture"],
-    "duration_ms": 510
-  },
-  "colors": {
-    "dominant": [
-      { "hex": "#1a1820", "rgb": [26, 24, 32], "hsl": [252, 14, 11], "percentage": 42.3 }
-    ],
-    "palette": ["#1a1820", ...],
-    "harmony": { "temperature": "warm-dominant", "contrast_ratio": 8.2 }
-  },
-  "spatial": {
-    "grid": { "columns": 3, "rows": 2, "cell_size": [196, 203], "gutters": [12, 8] },
-    "regions": [
-      { "id": 0, "bounds": { "x": 42, "y": 18, "w": 120, "h": 140 }, "dominant_color": "#c87432", "area_percentage": 3.2 }
-    ]
-  },
-  "edges": {
-    "contours": [
-      { "id": 0, "bounds": { "x": 42, "y": 18, "w": 120, "h": 140 }, "shape_type": "rectangle", "vertex_count": 4, "area": 16800 }
-    ],
-    "edge_density": 0.23,
-    "dominant_angles": [0, 90]
-  },
-  "gradients": {
-    "global_direction": 180,
-    "luminance_range": { "min": 4, "max": 218, "mean": 42 },
-    "transitions": [
-      { "direction": "top-to-bottom", "from_color": "#2a2830", "to_color": "#0e0d12", "strength": 0.4 }
-    ]
-  },
-  "textures": {
-    "global": { "roughness": 0.3, "glossiness": 0.7, "uniformity": 0.4 }
-  }
-}
-```
-
-## Dependencies
-
-- **Pillow** — image loading
-- **opencv-python-headless** — edge detection, contours, gradients
-- **numpy** — array operations
-- **scikit-learn** — KMeans color clustering
-- **scipy** — texture analysis (Laplacian, uniform filters)
-
-## Roadmap
-
-- **Phase 1** (current): Pipeline of 5 pixel-level analyzers + CLI
-- **Phase 1b**: MCP server wrapper for use with Claude Code
-- **Phase 2**: Region-parallel analysis via SAM segmentation
-- **Phase 3**: Semantic analysis with pluggable providers (CLIP, Florence-2, Claude API)
-
-## Tests
-
-```bash
-pytest -v          # 48 tests
-pytest -v -s tests/test_integration.py  # real image test (needs gem-boxes-mj.png)
-```
+Apache-2.0.

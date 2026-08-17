@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://industrialalgebra.com/schemas/lonis.block/summary/v1",
+  "x-lonis-protocol-version": "lonis.block/v1",
+  "title": "lonis.block summary payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "data"],
+  "properties": {
+    "kind": { "const": "summary" },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text"],
+      "properties": {
+        "of": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": { "type": "string", "maxLength": 4096 }
+        },
+        "text": { "type": "string", "maxLength": 16384 }
+      }
+    }
+  }
+}

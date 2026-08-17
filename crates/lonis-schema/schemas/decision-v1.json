@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://industrialalgebra.com/schemas/lonis.block/decision/v1",
+  "x-lonis-protocol-version": "lonis.block/v1",
+  "title": "lonis.block decision payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "data"],
+  "properties": {
+    "kind": { "const": "decision" },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["statement"],
+      "properties": {
+        "statement": { "type": "string", "maxLength": 4096 },
+        "rationale": { "type": "string", "maxLength": 16384 },
+        "alternatives": {
+          "type": "array",
+          "maxItems": 64,
+          "items": { "type": "string", "maxLength": 1024 }
+        }
+      }
+    }
+  }
+}
