@@ -121,6 +121,7 @@ fn goldens() -> Vec<(&'static str, SeedBlock)> {
                 side_effects: SideEffects::None,
                 cost: Cost::Low,
                 capabilities: Vec::new(),
+                verification: None,
             })),
         ),
         (

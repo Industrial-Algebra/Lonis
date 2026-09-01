@@ -631,6 +631,7 @@ mod tests {
                 side_effects: crate::SideEffects::None,
                 cost: crate::Cost::Low,
                 capabilities: Vec::new(),
+                verification: None,
             }),
             BlockKind::Intent(Intent {
                 statement: "recall similar decisions".into(),

@@ -6,10 +6,11 @@ members = [
     "crates/lonis-core",
     "crates/lonis-cli",
     "crates/lonis",
+    "crates/lonis-identity",
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.75"
 license = "Apache-2.0"
@@ -25,9 +26,10 @@ thiserror = "2"
 sha2 = "0.10"
 time = { version = "0.3", features = ["std", "formatting"] }
 clap = { version = "4", features = ["derive"] }
-lonis-schema = { version = "0.1.0", path = "crates/lonis-schema" }
-lonis-core = { version = "0.1.0", path = "crates/lonis-core" }
-lonis-derive = { version = "0.1.0", path = "crates/lonis-derive" }
+lonis-schema = { version = "0.2.0", path = "crates/lonis-schema" }
+lonis-core = { version = "0.2.0", path = "crates/lonis-core" }
+lonis-derive = { version = "0.2.0", path = "crates/lonis-derive" }
+lonis-identity = { version = "0.1.0", path = "crates/lonis-identity" }
 syn = "2"
 quote = "1"
 proc-macro2 = "1"
