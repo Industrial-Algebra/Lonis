@@ -15,6 +15,8 @@ recorded with its context and consequences. They live in
 | [0007](https://github.com/Industrial-Algebra/Lonis/blob/develop/docs/adr/0007-canonicalization-policy.md) | Content-hash canonicalization (number normalization) |
 | [0008](https://github.com/Industrial-Algebra/Lonis/blob/develop/docs/adr/0008-replay-verification.md) | `verify_replay` — replay verification helper |
 | [0009](https://github.com/Industrial-Algebra/Lonis/blob/develop/docs/adr/0009-stream-mode.md) | Stream mode: sync pull core, async at the host |
+| [0010](https://github.com/Industrial-Algebra/Lonis/blob/develop/docs/adr/0010-v0.2-additive-wire.md) | v0.2 additive wire: typed identity seam, verification tier, no-match contract |
+| [0011](https://github.com/Industrial-Algebra/Lonis/blob/develop/docs/adr/0011-recall-refusal-declination-register.md) | Recall refusal — the declination register (the deletion rule is the only door in) |
 
 The upstream constitution is the
 [Anima Ecosystem Doctrine](https://github.com/Industrial-Algebra) §2.7
