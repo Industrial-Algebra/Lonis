@@ -5,6 +5,30 @@ All notable changes to the Lonis workspace are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] — 2026-08-29
+
+Second additive wire release: the wire generation stays at v1 — 0.1 golden
+fixtures parse and re-emit byte-identically — while the Rust surface gains
+three contract improvements (ADR-0010).
+
+### The typed identity seam (lonis-identity)
+
+- New `lonis-identity` crate: namespaced `ParticipantId` (`source:slug`) with
+  the `IdentitySource` validation seam; `Attribution.identity` is now a
+  `ParticipantId` on the Rust side while serializing as the identical bare
+  string (transparent serde) — 0.1 wire unchanged.
+
+### The verification tier (R2)
+
+- `Verification` enum (`curated | auto_extracted | probed`) on
+  `ToolContract` as an optional field — unset ⇒ serialized form identical
+  to 0.1.
+
+### The no-match contract (R7)
+
+- `NoMatchDiagnostic` + `ScoredNeighbor` — search-capable verticals MUST
+  return a diagnostic on zero results instead of silent empties.
+
 ## [0.1.0] — 2026-08-10
 
 First public release of the Lonis workspace: an AI-native tool harness for

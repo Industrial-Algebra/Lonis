@@ -13,7 +13,7 @@
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::SchemaVersion;
+use crate::{ParticipantId, SchemaVersion};
 
 pub mod kinds;
 pub mod replay;
@@ -156,7 +156,7 @@ pub struct AttributionSource {
 #[serde(deny_unknown_fields)]
 pub struct Attribution {
     /// Participant identity (registry-owned, e.g. Dominic's registry).
-    pub identity: String,
+    pub identity: ParticipantId,
     /// The lens or role the participant spoke under, when applicable.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub viewpoint: Option<String>,
@@ -176,7 +176,7 @@ impl Attribution {
     /// Construct attribution for a participant/producer pair, stamped now
     /// (UTC). `viewpoint` and `location` start unset.
     #[must_use]
-    pub fn new(identity: impl Into<String>, producer: impl Into<String>) -> Self {
+    pub fn new(identity: impl Into<ParticipantId>, producer: impl Into<String>) -> Self {
         Self {
             identity: identity.into(),
             viewpoint: None,
@@ -651,7 +651,7 @@ mod tests {
     #[test]
     fn attribution_new_stamps_rfc3339_now() {
         let attr = Attribution::new("dominic", "lonis:test:fixture");
-        assert_eq!(attr.identity, "dominic");
+        assert_eq!(attr.identity.as_str(), "dominic");
         assert_eq!(attr.provenance.producer, "lonis:test:fixture");
         assert!(attr.viewpoint.is_none());
         assert!(attr.provenance.location.is_none());

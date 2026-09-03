@@ -21,6 +21,9 @@ jobs:
 
       # Dependency order; crates.io index propagation needs a beat between
       # publishes.
+      - name: Publish lonis-identity
+        run: cargo publish -p lonis-identity --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        # New in v0.2.0: must precede lonis-schema, which depends on it.
       - name: Publish lonis-derive
         run: cargo publish -p lonis-derive --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
       - name: Publish lonis-schema
