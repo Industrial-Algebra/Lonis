@@ -32,6 +32,7 @@ pub use block::{
     json_content_hash, now_rfc3339, Attribution, AttributionSource, Block, BlockBounds,
     BlockPayload, Compatibility, ReplayMetadata, ReplayProvenance, SeedBlock, BLOCK_SCHEMA_V1,
 };
+pub use lonis_identity::{IdentitySource, ParticipantId, ParticipantIdError};
 
 /// Re-export the derives (behind the `derive` feature).
 #[cfg(feature = "derive")]
@@ -357,6 +358,62 @@ pub struct ToolContract {
     /// Required capabilities.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub capabilities: Vec<String>,
+    /// Curation status (R2). Unset ⇒ serialized form identical to 0.1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verification: Option<Verification>,
+}
+
+// ===========================================================================
+// Verification tier (R2) + no-match contract (R7)
+// ===========================================================================
+
+/// Curation status of a discovery catalog entry (PR #21 R2). The promotion
+/// ladder mirrors Ijima's memory promotion (AutoCapture → promote):
+/// "promotion evidence" is the shared ecosystem concept — ADR-0010 §4.
+// Note: `Eq` added to the verbatim derive list — `ToolContract` (which now
+// carries `Option<Verification>`) already derives `Eq`, so the new enum must
+// too; wire-invisible.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "tier", rename_all = "snake_case")]
+pub enum Verification {
+    /// Human-reviewed and adopted.
+    Curated,
+    /// Machine-extracted from source material; unverified until promoted.
+    AutoExtracted {
+        source: String,
+        extracted_at: String,
+    },
+    /// A successful replay (ADR-0008) provided the evidence — the hash pins it.
+    Probed { evidence_hash: String },
+}
+
+/// One nearest-neighbor candidate in a no-match diagnostic (R7).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ScoredNeighbor {
+    /// The candidate's identity (any id vocabulary the vertical uses).
+    pub identity: String,
+    /// Similarity score in [0, 1]; higher is closer.
+    pub score: f64,
+    /// Why this candidate ranked — the ranking basis, e.g. "token_overlap".
+    pub basis: String,
+}
+
+/// What a search-capable vertical MUST return on zero results (R7) —
+/// "nothing exists" and "your phrasing was wrong" must be distinguishable.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NoMatchDiagnostic {
+    /// Echo of the query that missed.
+    pub query: String,
+    /// Number of concepts the query matched (zero by construction).
+    pub matched: usize,
+    /// Nearest candidates despite the miss, best first, possibly empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub nearest: Vec<ScoredNeighbor>,
+    /// Human/agent-readable sentence, e.g.
+    /// "matched 0 concepts; closest by token overlap: schubert_cell_of".
+    pub diagnostic: String,
 }
 
 #[cfg(test)]
@@ -440,6 +497,7 @@ mod tests {
             side_effects: SideEffects::None,
             cost: Cost::Medium,
             capabilities: vec!["model_inference".into()],
+            verification: None,
         };
         let json = serde_json::to_string(&contract).unwrap();
         let back: ToolContract = serde_json::from_str(&json).unwrap();

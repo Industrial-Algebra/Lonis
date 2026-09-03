@@ -98,6 +98,7 @@ impl Tool<BlockKind> for Echo {
             side_effects: SideEffects::None,
             cost: Cost::Low,
             capabilities: Vec::new(),
+            verification: None,
         })
     }
 }
@@ -144,6 +145,7 @@ impl Tool<BlockKind> for Version {
             side_effects: SideEffects::ReadOnly,
             cost: Cost::Low,
             capabilities: Vec::new(),
+            verification: None,
         })
     }
 }

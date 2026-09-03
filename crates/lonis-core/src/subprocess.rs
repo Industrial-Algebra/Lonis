@@ -703,6 +703,7 @@ impl Tool<BlockKind> for SubprocessTool {
             side_effects: SideEffects::MutatesExternal,
             cost: Cost::Medium,
             capabilities: Vec::new(),
+            verification: None,
         })
     }
 }
